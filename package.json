@@ -1,0 +1,23 @@
+{
+  "name": "analytics",
+  "version": "1.0.0",
+  "description": "",
+  "main": "trafficByApi.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Dino Chiesa <dchiesa@google.com>",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "async": "^2.6.1",
+    "dateformat": "^3.0.3",
+    "merge": "^1.2.0",
+    "netrc": "^0.1.4",
+    "node-getopt": "^0.3.2",
+    "readline-sync": "^1.4.9",
+    "request": "^2.87.0",
+    "sha.js": "^2.4.11",
+    "sprintf-js": "^1.1.1",
+    "url-join": "^4.0.0"
+  }
+}
