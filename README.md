@@ -47,11 +47,12 @@ Generate a google sheet that summarizes the traffic volume data for the current 
 ```
 
 The user will be prompted to authenticate to Google, in order to grant
-consent to the app to generate a sheet.
+consent to the "API Traffic Summarizer" app to generate a sheet.
 
-While the scope requested allows the tool to create and view sheets, the
+While the app requests a scope that allows the tool to create and view sheets, the
 tool merely creates a new sheet. It does not read any existing sheets.
 
+When used with the -S option, no .csv file is emitted.
 
 
 ## Example 2
@@ -62,8 +63,10 @@ Generate a .csv file that summarizes the traffic volume data for the current yea
  node ./trafficByApiSummarizer.js -n -o my-org-name
 ```
 
+When used without the -S option, a .csv file is emitted, and no Google sheet is created.
 
-## Example 2
+
+## Example 3
 
 Generate a .csv file that summarizes the traffic volume data for 2017, for an Edge organization.
 
@@ -76,7 +79,5 @@ Generate a .csv file that summarizes the traffic volume data for 2017, for an Ed
 
 ## Bugs
 
-* Does not use tokens for authenticating to the Apigee Edge administrative API.
-
-
+* Does not use tokens for authenticating to the Apigee Edge administrative API, won't work in an organization for which single-sign is enabled.
 

@@ -2,7 +2,7 @@
 // ------------------------------------------------------------------
 //
 // created: Tue Aug  7 14:42:00 2018
-// last saved: <2018-August-08 08:53:52>
+// last saved: <2018-August-08 09:13:29>
 //
 
 /* jshint esversion: 6, node: true */
@@ -409,12 +409,10 @@ function doneAllEnvironments(e, results) {
   const label = sprintf('traffic-by-api--%s-%s', opt.options.org, opt.options.year);
 
   if (opt.options.sheet) {
-    // Load client secrets from a local file.
-    //const clientSecretFile = path.join(defaults.cachedatadir, "gsheets_client_secret.json");
-    const clientSecretFile = path.join(".", "gsheets_client_secret.json");
-    fs.readFile(clientSecretFile, (e, content) => {
+    const clientCredentialsFile = path.join(".", "gsheets_client_credentials.json");
+    fs.readFile(clientCredentialsFile, (e, content) => {
       if (e) {
-        console.log('Error loading client secret file:', e);
+        console.log('Error loading client credentials file:', e);
         return;
       }
       oauth2Authorize(JSON.parse(content), createSheet(label, lines));
