@@ -2,7 +2,7 @@
 // ------------------------------------------------------------------
 //
 // created: Tue Aug  7 14:42:00 2018
-// last saved: <2018-August-08 18:16:20>
+// last saved: <2018-August-08 18:25:20>
 //
 
 /* jshint esversion: 6, node: true */
@@ -25,7 +25,7 @@ const request      = require('request'),
       async        = require('async'),
       netrc        = require('netrc')(),
       dateFormat   = require('dateformat'),
-      version      = '20180808-1816',
+      version      = '20180808-1825',
       mgmtServer   = 'https://api.enterprise.apigee.com',
       SCOPES = ['https://www.googleapis.com/auth/spreadsheets'],
       defaults     = {
@@ -260,11 +260,13 @@ function summarizeEnvironments(rawlines) {
     const org = x1[1];
     const env = x1[2];
     var line = lines.find( x => { return (x[0] ==org) && (x[1] == env); });
+
     if (line) {
       if (i1>0) {
-        line.forEach( (x2, i2) => {
-          if (i2>2) {
-            line[i2] += x1[i2 + 1];
+        line.forEach( (val, column) => {
+          if (column>1) {
+            //console.log('line[%d] := %d + %d', column, line[column], x1[column + 1]);
+            line[column] += x1[column + 1];
           }
         });
       }
