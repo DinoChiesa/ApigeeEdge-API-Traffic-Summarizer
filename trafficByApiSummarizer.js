@@ -1,8 +1,8 @@
-// trafficSheet.js
+// trafficByApiSummarizer.js
 // ------------------------------------------------------------------
 //
 // created: Tue Aug  7 14:42:00 2018
-// last saved: <2018-August-08 09:13:29>
+// last saved: <2018-August-08 18:16:20>
 //
 
 /* jshint esversion: 6, node: true */
@@ -25,7 +25,7 @@ const request      = require('request'),
       async        = require('async'),
       netrc        = require('netrc')(),
       dateFormat   = require('dateformat'),
-      version      = '20180808-0850',
+      version      = '20180808-1816',
       mgmtServer   = 'https://api.enterprise.apigee.com',
       SCOPES = ['https://www.googleapis.com/auth/spreadsheets'],
       defaults     = {
@@ -206,7 +206,6 @@ function getDataForOneEnvironment(options){
   };
 }
 
-
 function getNewGsuiteToken(oAuth2Client, tokenStashPath, callback) {
   console.log('You must authorize this application...');
   const authUrl = oAuth2Client.generateAuthUrl({
@@ -254,113 +253,311 @@ function oauth2Authorize(credentials, callback) {
   });
 }
 
+function summarizeEnvironments(rawlines) {
+  var lines = [];
+  //rawlines.forEach(x => { console.log(x); });
+  rawlines.forEach((x1, i1) => {
+    const org = x1[1];
+    const env = x1[2];
+    var line = lines.find( x => { return (x[0] ==org) && (x[1] == env); });
+    if (line) {
+      if (i1>0) {
+        line.forEach( (x2, i2) => {
+          if (i2>2) {
+            line[i2] += x1[i2 + 1];
+          }
+        });
+      }
+    }
+    else {
+      line = [org, env].concat(x1.slice(3));
+      //console.log('first sighting (%s): %s', env, JSON.stringify(line));
+      lines.push(line);
+    }
+  });
+  //lines.forEach(x => { console.log(x); });
+  return lines;
+}
+
+function pushOneUpdate(sheets, spreadsheetId) {
+  return function(item, cb) {
+    // this is the format for .update()
+    var options = {
+            spreadsheetId: spreadsheetId,
+            valueInputOption: 'USER_ENTERED',
+            range: item.range,
+            resource: {
+              values: item.values
+            }
+        };
+
+    // This is the format for .batchUpdate()
+    // var options = {
+    //       spreadsheetId: spreadsheetId,
+    //       valueInputOption: 'USER_ENTERED',
+    //       data: [ item ]
+    //     };
+    sheets.spreadsheets.values.update(options, (e, updateResponse) => {
+      handleError(e);
+      cb(null, {});
+    });
+  };
+}
+
 function createSheet(label, lines) {
   return function(auth) {
     const sheets = google.sheets({version: 'v4', auth});
     const today = dateFormat(new Date(), 'yyyy-mmm-dd');
-
+    const sheetTitles = [
+            label,
+            label.replace('api', 'environment')
+          ];
     var request = {
           resource: {
             properties : {
               title: "API Traffic Summary: " + opt.options.org + ' as of ' + today
-            }
+            },
+            sheets : [
+              {
+                "properties": { sheetId : 0, title: sheetTitles[0] }
+              },
+              {
+                "properties": { sheetId : 1, title: sheetTitles[1] }
+              }
+            ]
           }
         };
 
     sheets.spreadsheets.create(request, function(e, createResponse) {
       handleError(e);
-      // import data
-      var options = {
-            spreadsheetId: createResponse.data.spreadsheetId,
-            range: sprintf("A1:P%d", lines.length +1),
-            valueInputOption: 'USER_ENTERED',
-            resource: {
-              values: lines
-            }
-          };
-
-      sheets.spreadsheets.values.update(options, (e, updateResponse) => {
-        handleError(e);
-        // make some changes
-        var request = {
-              spreadsheetId: createResponse.data.spreadsheetId,
-              resource: {
-                "requests": [
-                  // specify sheet name
-                  {
-                    update_sheet_properties: {
-                      properties: {sheet_id: 0, title: label},
-                      fields: 'title'
-                    }
-                  },
-                  // format all the numbers
-                  {
-                    "repeatCell": {
-                      "range": {
-                        "sheetId": 0,
-                        "startRowIndex": 1,
-                        "endRowIndex": lines.length + 2,
-                        "startColumnIndex": 3,
-                        "endColumnIndex": 16
-                      },
-                      "cell": {
-                        "userEnteredFormat": {
-                          "numberFormat": {
-                            "type": "NUMBER",
-                            "pattern": "#,##0"
-                          }
-                        }
-                      },
-                      "fields": "userEnteredFormat.numberFormat"
-                    }
-                  },
-                  // this attempt to insert sum formulas,
-                  // did not work. Dearth of examples !
-                  // {
-                  //   "repeatCell": {
-                  //     "range": {
-                  //       "sheetId": 0,
-                  //       "startRowIndex": lines.length + 2,
-                  //       "endRowIndex": lines.length + 2,
-                  //       "startColumnIndex": 3,
-                  //       "endColumnIndex": 15
-                  //     },
-                  //     "cell": {
-                  //       "userEnteredValue": {
-                  //         "formulaValue": formula
-                  //       }
-                  //     },
-                  //     "fields": "userEnteredValue.formulaValue"
-                  //   }
-                  // }
-
-                ]
+      // import data, and add sum formuli
+      const lines2 = summarizeEnvironments(lines);
+      const columnLetters = Array(16).fill(0).map( (x, i) => String.fromCharCode(65 + i));
+      const updateData = [
+              {
+                range: sprintf("%s!A1:P%d", sheetTitles[0], lines.length+1),
+                values: lines
+              },
+              {
+                range: sprintf("%s!D%d:P%d", sheetTitles[0], lines.length +1, lines.length +1),
+                values: [columnLetters.slice(3).map(c => sprintf("=SUM(%s2:%s%d)", c, c, lines.length))]
+              },
+              {
+                range: sprintf("%s!A1:O%d", sheetTitles[1], lines2.length +1),
+                values: lines2
+              },
+              {
+                range: sprintf("%s!C%d:O%d", sheetTitles[1], lines2.length +1, lines2.length +1),
+                values: [columnLetters.slice(2, -1).map(c => sprintf("=SUM(%s2:%s%d)", c, c, lines2.length))]
               }
-            };
+            ];
 
-        sheets.spreadsheets.batchUpdate(request, function(e, sheetUpdateResponse) {
-          handleError(e);
-          // generate sum formulas
-          var formuli = 
-            Array(13).fill(0).map( (x, i) => String.fromCharCode(65 + 3 + i))
-            .map(c => sprintf("=SUM(%s2:%s%d)", c, c, lines.length));
-          // insert the formulas
-          var options = {
-                spreadsheetId: createResponse.data.spreadsheetId,
-                range: sprintf("D%d:P%d", lines.length +1, lines.length +1),
-                valueInputOption: 'USER_ENTERED',
-                resource: {
-                  values: [formuli]
-                }
-              };
-          sheets.spreadsheets.values.update(options, (e, updateResponse) => {
-            handleError(e);
-            var sheetUrl = sprintf('https://docs.google.com/spreadsheets/d/%s/edit', createResponse.data.spreadsheetId);
-            console.log('sheet url: %s', sheetUrl);
-            opn(sheetUrl, {wait: false});
-          });
-        });
-      });
+      async.mapSeries(updateData,
+                      pushOneUpdate(sheets, createResponse.data.spreadsheetId),
+                      function(e, results) {
+                        handleError(e);
+                        // now, make some format changes
+                        var request = {
+                              spreadsheetId: createResponse.data.spreadsheetId,
+                              resource: {
+                                "requests": [
+                                  // format the numbers in sheet 0
+                                  {
+                                    "repeatCell": {
+                                      "range": {
+                                        "sheetId": 0,
+                                        "startRowIndex": 1,
+                                        "endRowIndex": lines.length + 2,
+                                        "startColumnIndex": 3,
+                                        "endColumnIndex": 16
+                                      },
+                                      "cell": {
+                                        "userEnteredFormat": {
+                                          "numberFormat": {
+                                            "type": "NUMBER",
+                                            "pattern": "#,##0"
+                                          }
+                                        }
+                                      },
+                                      "fields": "userEnteredFormat.numberFormat"
+                                    }
+                                  },
+                                  // freeze the header in sheet 0
+                                  {
+                                    "updateSheetProperties": {
+                                      "properties": {
+                                        "sheetId": 0,
+                                        "gridProperties": {
+                                          "frozenRowCount": 1
+                                        }
+                                      },
+                                      "fields": "gridProperties.frozenRowCount"
+                                    }
+                                  },
+                                  // format the header line in sheet 0
+                                  {
+                                    "repeatCell": {
+                                      "range": {
+                                        "sheetId": 0,
+                                        "startRowIndex": 0,
+                                        "endRowIndex": 1,
+                                        "startColumnIndex": 3,
+                                        "endColumnIndex": 16
+                                      },
+                                      "cell": {
+                                        "userEnteredFormat": {
+                                          "backgroundColor": {
+                                            "red": 0.0,
+                                            "green": 0.0,
+                                            "blue": 0.0
+                                          },
+                                          "horizontalAlignment" : "RIGHT",
+                                          "textFormat": {
+                                            "foregroundColor": {
+                                              "red": 1.0,
+                                              "green": 1.0,
+                                              "blue": 1.0
+                                            },
+                                            "fontSize": 12,
+                                            "bold": true
+                                          }
+                                        }
+                                      },
+                                      "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"
+                                    }
+                                  },
+
+                                  // left justify the first three columns
+                                  {
+                                    "repeatCell": {
+                                      "range": {
+                                        "sheetId": 0,
+                                        "startRowIndex": 0,
+                                        "endRowIndex": 1,
+                                        "startColumnIndex": 0,
+                                        "endColumnIndex": 3
+                                      },
+                                      "cell": {
+                                        "userEnteredFormat": {
+                                          "backgroundColor": {
+                                            "red": 0.0,
+                                            "green": 0.0,
+                                            "blue": 0.0
+                                          },
+                                          "horizontalAlignment" : "LEFT",
+                                          "textFormat": {
+                                            "foregroundColor": {
+                                              "red": 1.0,
+                                              "green": 1.0,
+                                              "blue": 1.0
+                                            },
+                                            "fontSize": 12,
+                                            "bold": true
+                                          }
+                                        }
+                                      },
+                                      "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"
+                                    }
+                                  },
+
+                                  // format the numbers in sheet 1
+                                  {
+                                    "repeatCell": {
+                                      "range": {
+                                        "sheetId": 1,
+                                        "startRowIndex": 1,
+                                        "endRowIndex": lines2.length + 2,
+                                        "startColumnIndex": 2,
+                                        "endColumnIndex": 15
+                                      },
+                                      "cell": {
+                                        "userEnteredFormat": {
+                                          "numberFormat": {
+                                            "type": "NUMBER",
+                                            "pattern": "#,##0"
+                                          }
+                                        }
+                                      },
+                                      "fields": "userEnteredFormat.numberFormat"
+                                    }
+                                  },
+                                  // format the header in sheet 1
+                                  {
+                                    "repeatCell": {
+                                      "range": {
+                                        "sheetId": 1,
+                                        "startRowIndex": 0,
+                                        "endRowIndex": 1,
+                                        "startColumnIndex": 2,
+                                        "endColumnIndex": 15
+                                      },
+                                      "cell": {
+                                        "userEnteredFormat": {
+                                          "backgroundColor": {
+                                            "red": 0.0,
+                                            "green": 0.0,
+                                            "blue": 0.0
+                                          },
+                                          "horizontalAlignment" : "RIGHT",
+                                          "textFormat": {
+                                            "foregroundColor": {
+                                              "red": 1.0,
+                                              "green": 1.0,
+                                              "blue": 1.0
+                                            },
+                                            "fontSize": 12,
+                                            "bold": true
+                                          }
+                                        }
+                                      },
+                                      "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"
+                                    }
+                                  },
+
+                                  // left justify the first two columns
+                                  {
+                                    "repeatCell": {
+                                      "range": {
+                                        "sheetId": 1,
+                                        "startRowIndex": 0,
+                                        "endRowIndex": 1,
+                                        "startColumnIndex": 0,
+                                        "endColumnIndex": 2
+                                      },
+                                      "cell": {
+                                        "userEnteredFormat": {
+                                          "backgroundColor": {
+                                            "red": 0.0,
+                                            "green": 0.0,
+                                            "blue": 0.0
+                                          },
+                                          "horizontalAlignment" : "LEFT",
+                                          "textFormat": {
+                                            "foregroundColor": {
+                                              "red": 1.0,
+                                              "green": 1.0,
+                                              "blue": 1.0
+                                            },
+                                            "fontSize": 12,
+                                            "bold": true
+                                          }
+                                        }
+                                      },
+                                      "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"
+                                    }
+                                  },
+
+                                ]
+                              }
+                            };
+
+                        sheets.spreadsheets.batchUpdate(request, function(e, sheetUpdateResponse) {
+                          handleError(e);
+                          var sheetUrl = sprintf('https://docs.google.com/spreadsheets/d/%s/edit', createResponse.data.spreadsheetId);
+                          console.log('sheet url: %s', sheetUrl);
+                          opn(sheetUrl, {wait: false});
+                        });
+                      });
     });
   };
 }
@@ -406,8 +603,7 @@ function doneAllEnvironments(e, results) {
    });
   });
 
-  const label = sprintf('traffic-by-api--%s-%s', opt.options.org, opt.options.year);
-
+  const label = sprintf('by-api--%s-%s', opt.options.org, opt.options.year);
   if (opt.options.sheet) {
     const clientCredentialsFile = path.join(".", "gsheets_client_credentials.json");
     fs.readFile(clientCredentialsFile, (e, content) => {
@@ -419,7 +615,7 @@ function doneAllEnvironments(e, results) {
     });
   }
   else {
-    emitCsvFile(label, lines);
+    emitCsvFile('traffic-' + label, lines);
   }
 }
 
