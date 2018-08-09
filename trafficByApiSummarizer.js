@@ -2,7 +2,7 @@
 // ------------------------------------------------------------------
 //
 // created: Tue Aug  7 14:42:00 2018
-// last saved: <2018-August-08 18:49:05>
+// last saved: <2018-August-09 10:37:46>
 //
 
 /* jshint esversion: 6, node: true */
@@ -25,9 +25,9 @@ const request      = require('request'),
       async        = require('async'),
       netrc        = require('netrc')(),
       dateFormat   = require('dateformat'),
-      version      = '20180808-1849',
+      version      = '20180809-1037',
       mgmtServer   = 'https://api.enterprise.apigee.com',
-      SCOPES = ['https://www.googleapis.com/auth/spreadsheets'],
+      GOOG_APIS_SCOPES = ['https://www.googleapis.com/auth/spreadsheets'],
       defaults     = {
         dirs : {
           cache : 'cache',
@@ -98,11 +98,14 @@ const getBasicAuthHeader = memoize(function(mgmtServer) {
           return 'Basic ' + base64Encode(netrc[mgmtUrl.hostname].login + ':' + netrc[mgmtUrl.hostname].password);
         }
 
+        console.log('\nAuthenticate to %s', mgmtServer);
         var username = opt.options.username;
         if ( !username ) {
-           username = readlineSync.question(' USER NAME  : ');
+          username = readlineSync.question('USER NAME: ');
         }
-        var password = readlineSync.question(' Password for ' + username + ' : ', {hideEchoBack: true});
+        // this script never accepts passwords on the command line.
+        console.log();
+        var password = readlineSync.question('Password for ' + username + ' : ', {hideEchoBack: true});
         return 'Basic ' + base64Encode(username + ':' + password);
       });
 
@@ -206,29 +209,38 @@ function getDataForOneEnvironment(options){
   };
 }
 
+
+function sleep (time) {
+  return new Promise((resolve) => setTimeout(resolve, time));
+}
+
 function getNewGsuiteToken(oAuth2Client, tokenStashPath, callback) {
-  console.log('You must authorize this application...');
-  const authUrl = oAuth2Client.generateAuthUrl({
-    access_type: 'offline',
-    scope: SCOPES
-  });
-  // Authorize this app by visiting the url
-  opn(authUrl, {wait: false});
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  });
-  rl.question('Enter the one-time-code: ', (code) => {
-    rl.close();
-    oAuth2Client.getToken(code, (err, token) => {
-      if (err) return callback(err);
-      oAuth2Client.setCredentials(token);
-      // Store the token to disk for later program executions
-      fs.writeFile(tokenStashPath, JSON.stringify(token, null, 2) + '\n', (err) => {
-        if (err) console.error(err);
-        //console.log('Token stashed in %s', config.tokenStashPath);
+  console.log('\nYou must authorize API Traffic Summarizer to create a new sheet.\n');
+  console.log('This script will now open a browser tab. After granting consent, you will');
+  console.log('receive a one-time code. Return here and paste it in, to continue....\n');
+
+  sleep(4200).then(() => {
+    const authUrl = oAuth2Client.generateAuthUrl({
+            access_type: 'offline',
+            scope: GOOG_APIS_SCOPES
+          });
+    // Authorize this app by visiting the url
+    opn(authUrl, {wait: false});
+    const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
+          });
+    rl.question('Paste the one-time-code: ', (code) => {
+      rl.close();
+      oAuth2Client.getToken(code, (e, token) => {
+        if (e) return callback(e);
+        oAuth2Client.setCredentials(token);
+        // Store the token to disk for later program executions
+        fs.writeFile(tokenStashPath, JSON.stringify(token, null, 2) + '\n', (e) => {
+          if (e) console.error(e); // this is a non-fatal condition
+        });
+        callback(oAuth2Client);
       });
-      callback(oAuth2Client);
     });
   });
 }
@@ -242,10 +254,9 @@ function getNewGsuiteToken(oAuth2Client, tokenStashPath, callback) {
 function oauth2Authorize(credentials, callback) {
   const {client_secret, client_id, redirect_uris} = credentials.installed;
   const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
-
   const tokenStashPath = path.join(defaults.dirs.cache, ".gsheets_token_stash.json");
 
-  // Check if we have previously stored a token.
+  // Check if there is a previously stashed token.
   fs.readFile(tokenStashPath, (e, token) => {
     if (e) return getNewGsuiteToken(oAuth2Client, tokenStashPath, callback);
     oAuth2Client.setCredentials(JSON.parse(token));
@@ -292,13 +303,6 @@ function pushOneUpdate(sheets, spreadsheetId) {
               values: item.values
             }
         };
-
-    // This is the format for .batchUpdate()
-    // var options = {
-    //       spreadsheetId: spreadsheetId,
-    //       valueInputOption: 'USER_ENTERED',
-    //       data: [ item ]
-    //     };
     sheets.spreadsheets.values.update(options, (e, updateResponse) => {
       handleError(e);
       cb(null, {});
@@ -308,6 +312,7 @@ function pushOneUpdate(sheets, spreadsheetId) {
 
 function createSheet(label, lines) {
   return function(auth) {
+    console.log('\nCreating a new spreadsheet on Google sheets...');
     const sheets = google.sheets({version: 'v4', auth});
     const today = dateFormat(new Date(), 'yyyy-mmm-dd');
     const sheetTitles = [
@@ -363,6 +368,8 @@ function createSheet(label, lines) {
               }
             ];
 
+      // .batchUpdate() failed with a HTTP 413 "Entity Too Large"
+      // so this use of async makes N requests in series.
       async.mapSeries(updateData,
                       pushOneUpdate(sheets, createResponse.data.spreadsheetId),
                       function(e, results) {
