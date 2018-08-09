@@ -2,7 +2,7 @@
 // ------------------------------------------------------------------
 //
 // created: Tue Aug  7 14:42:00 2018
-// last saved: <2018-August-08 18:47:45>
+// last saved: <2018-August-08 18:49:05>
 //
 
 /* jshint esversion: 6, node: true */
@@ -25,7 +25,7 @@ const request      = require('request'),
       async        = require('async'),
       netrc        = require('netrc')(),
       dateFormat   = require('dateformat'),
-      version      = '20180808-1825',
+      version      = '20180808-1849',
       mgmtServer   = 'https://api.enterprise.apigee.com',
       SCOPES = ['https://www.googleapis.com/auth/spreadsheets'],
       defaults     = {
