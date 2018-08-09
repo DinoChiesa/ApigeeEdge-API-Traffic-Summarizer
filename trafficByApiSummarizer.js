@@ -2,7 +2,7 @@
 // ------------------------------------------------------------------
 //
 // created: Tue Aug  7 14:42:00 2018
-// last saved: <2018-August-08 18:25:20>
+// last saved: <2018-August-08 18:47:45>
 //
 
 /* jshint esversion: 6, node: true */
@@ -335,6 +335,7 @@ function createSheet(label, lines) {
       // import data, and add sum formuli
       const lines2 = summarizeEnvironments(lines);
       const columnLetters = Array(16).fill(0).map( (x, i) => String.fromCharCode(65 + i));
+
       const updateData = [
               {
                 range: sprintf("%s!A1:P%d", sheetTitles[0], lines.length+1),
@@ -351,6 +352,14 @@ function createSheet(label, lines) {
               {
                 range: sprintf("%s!C%d:O%d", sheetTitles[1], lines2.length +1, lines2.length +1),
                 values: [columnLetters.slice(2, -1).map(c => sprintf("=SUM(%s2:%s%d)", c, c, lines2.length))]
+              },
+              {
+                range: sprintf("%s!Q2:Q%d", sheetTitles[0], lines.length +1),
+                values: Array(lines.length).fill(0).map( (x, i) => [sprintf("=P%d/P$%d", i + 2, lines.length + 1)])
+              },
+              {
+                range: sprintf("%s!P2:P%d", sheetTitles[1], lines2.length +1),
+                values: Array(lines2.length).fill(0).map( (x, i) => [sprintf("=O%d/O$%d", i + 2, lines2.length + 1)])
               }
             ];
 
@@ -382,6 +391,52 @@ function createSheet(label, lines) {
                                         }
                                       },
                                       "fields": "userEnteredFormat.numberFormat"
+                                    }
+                                  },
+                                  // format the numbers in sheet 0
+                                  {
+                                    "repeatCell": {
+                                      "range": {
+                                        "sheetId": 0,
+                                        "startRowIndex": 1,
+                                        "endRowIndex": lines.length + 2,
+                                        "startColumnIndex": 16,
+                                        "endColumnIndex": 17
+                                      },
+                                      "cell": {
+                                        "userEnteredFormat": {
+                                          "numberFormat": {
+                                            "type": "NUMBER",
+                                            "pattern": "0.00%"
+                                          }
+                                        }
+                                      },
+                                      "fields": "userEnteredFormat.numberFormat"
+                                    }
+                                  },
+
+                                  // bold the sums in sheet 0
+                                  {
+                                    "repeatCell": {
+                                      "range": {
+                                        "sheetId": 0,
+                                        "startRowIndex": lines.length,
+                                        "endRowIndex": lines.length + 1,
+                                        "startColumnIndex": 3,
+                                        "endColumnIndex": 16
+                                      },
+                                      "cell": {
+                                        "userEnteredFormat": {
+                                          "numberFormat": {
+                                            "type": "NUMBER",
+                                            "pattern": "#,##0"
+                                          },
+                                          "textFormat": {
+                                            "bold": true
+                                          }
+                                        }
+                                      },
+                                      "fields": "userEnteredFormat(numberFormat,textFormat)"
                                     }
                                   },
                                   // freeze the header in sheet 0
@@ -461,7 +516,6 @@ function createSheet(label, lines) {
                                       "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"
                                     }
                                   },
-
                                   // format the numbers in sheet 1
                                   {
                                     "repeatCell": {
@@ -481,6 +535,63 @@ function createSheet(label, lines) {
                                         }
                                       },
                                       "fields": "userEnteredFormat.numberFormat"
+                                    }
+                                  },
+                                  // format the percentages in sheet 1
+                                  {
+                                    "repeatCell": {
+                                      "range": {
+                                        "sheetId": 1,
+                                        "startRowIndex": 1,
+                                        "endRowIndex": lines2.length + 2,
+                                        "startColumnIndex": 15,
+                                        "endColumnIndex": 16
+                                      },
+                                      "cell": {
+                                        "userEnteredFormat": {
+                                          "numberFormat": {
+                                            "type": "NUMBER",
+                                            "pattern": "0.00%"
+                                          }
+                                        }
+                                      },
+                                      "fields": "userEnteredFormat.numberFormat"
+                                    }
+                                  },
+                                  // bold the sums in sheet 1
+                                  {
+                                    "repeatCell": {
+                                      "range": {
+                                        "sheetId": 1,
+                                        "startRowIndex": lines2.length,
+                                        "endRowIndex": lines2.length + 1,
+                                        "startColumnIndex": 2,
+                                        "endColumnIndex": 15
+                                      },
+                                      "cell": {
+                                        "userEnteredFormat": {
+                                          "numberFormat": {
+                                            "type": "NUMBER",
+                                            "pattern": "#,##0"
+                                          },
+                                          "textFormat": {
+                                            "bold": true
+                                          }
+                                        }
+                                      },
+                                      "fields": "userEnteredFormat(numberFormat,textFormat)"
+                                    }
+                                  },
+                                  // freeze the header in sheet 1
+                                  {
+                                    "updateSheetProperties": {
+                                      "properties": {
+                                        "sheetId": 1,
+                                        "gridProperties": {
+                                          "frozenRowCount": 1
+                                        }
+                                      },
+                                      "fields": "gridProperties.frozenRowCount"
                                     }
                                   },
                                   // format the header in sheet 1
