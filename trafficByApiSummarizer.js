@@ -2,7 +2,7 @@
 // ------------------------------------------------------------------
 //
 // created: Tue Aug  7 14:42:00 2018
-// last saved: <2018-August-09 10:37:46>
+// last saved: <2018-September-05 14:37:42>
 //
 
 /* jshint esversion: 6, node: true */
@@ -25,17 +25,18 @@ const request      = require('request'),
       async        = require('async'),
       netrc        = require('netrc')(),
       dateFormat   = require('dateformat'),
-      version      = '20180809-1037',
-      mgmtServer   = 'https://api.enterprise.apigee.com',
+      version      = '20180905-1436',
       GOOG_APIS_SCOPES = ['https://www.googleapis.com/auth/spreadsheets'],
       defaults     = {
         dirs : {
           cache : 'cache',
           output : 'output'
-        }
+        },
+        mgmtServer: 'https://api.enterprise.apigee.com'
       },
     getopt = new Getopt([
       ['o' , 'org=ARG', 'required. name of the Edge organization'],
+      ['M' , 'mgmtserver=ARG', 'the base path, including optional port, of the Edge mgmt server. Defaults to ' + defaults.mgmtServer + ' . '],
       ['u' , 'username=ARG', 'optional. username for authenticating to Edge'],
       ['n' , 'netrc', 'optional. specify in lieu of username to rely on .netrc for credentials.'],
       ['y' , 'year=ARG', 'optional. specify a 4-digit year. Default: the current year.'],
@@ -113,7 +114,7 @@ function getRequestOptions() {
   return {
     method : 'GET',
     headers : {
-      authorization : getBasicAuthHeader(mgmtServer),
+      authorization : getBasicAuthHeader(opt.options.mgmtServer),
       accept : 'application/json'
     }
   };
@@ -121,11 +122,16 @@ function getRequestOptions() {
 
 function getEnvironments(cb) {
   var requestOptions = merge(getRequestOptions(), {
-        url : urljoin(mgmtServer, 'v1/o', opt.options.org)
+        url : urljoin(opt.options.mgmtServer, 'v1/o', opt.options.org)
       });
 
   console.log('GET "%s"', requestOptions.url);
   request(requestOptions, function(error, response, body){
+    handleError(error);
+    if (response.statusCode != 200) {
+      console.log('the query failed: ' + response.statusCode);
+      process.exit(1);
+    }
     var result = JSON.parse(body);
     cb(null, result.environments);
   });
@@ -137,7 +143,7 @@ function retrieveData(options, cb) {
                       getTimeRange(options.startTime, options.endTime));
 
   var requestOptions = merge(getRequestOptions(), {
-        url : urljoin(mgmtServer, 'v1/o', options.organization, 'e', options.environment, 'stats/apis') + query
+        url : urljoin(opt.options.mgmtServer, 'v1/o', options.organization, 'e', options.environment, 'stats/apis') + query
       });
 
   console.log('GET "%s"', requestOptions.url);
@@ -337,10 +343,13 @@ function createSheet(label, lines) {
 
     sheets.spreadsheets.create(request, function(e, createResponse) {
       handleError(e);
-      // import data, and add sum formuli
+      // import data, and add sum formuli, produce chart
       const lines2 = summarizeEnvironments(lines);
       const columnLetters = Array(16).fill(0).map( (x, i) => String.fromCharCode(65 + i));
 
+      // A single .batchUpdate() call failed with a HTTP 413 "Entity Too Large",
+      // because the data is too large. To avoid that, this system makes N
+      // requests in series.
       const updateData = [
               {
                 range: sprintf("%s!A1:P%d", sheetTitles[0], lines.length+1),
@@ -368,20 +377,18 @@ function createSheet(label, lines) {
               }
             ];
 
-      // .batchUpdate() failed with a HTTP 413 "Entity Too Large"
-      // so this use of async makes N requests in series.
       async.mapSeries(updateData,
                       pushOneUpdate(sheets, createResponse.data.spreadsheetId),
                       function(e, results) {
                         handleError(e);
-                        // now, make some format changes
-                        var request = {
+                        // now, make some format changes, and finally add a chart
+                        var batchRequest = {
                               spreadsheetId: createResponse.data.spreadsheetId,
                               resource: {
-                                "requests": [
+                                requests: [
                                   // format the numbers in sheet 0
                                   {
-                                    "repeatCell": {
+                                    repeatCell: {
                                       "range": {
                                         "sheetId": 0,
                                         "startRowIndex": 1,
@@ -400,7 +407,7 @@ function createSheet(label, lines) {
                                       "fields": "userEnteredFormat.numberFormat"
                                     }
                                   },
-                                  // format the numbers in sheet 0
+                                  // format the percentages in sheet 0
                                   {
                                     "repeatCell": {
                                       "range": {
@@ -667,11 +674,71 @@ function createSheet(label, lines) {
                                     }
                                   },
 
+                                  // Finally, add a chart.
+                                  {
+                                    "addChart": {
+                                      "chart": {
+                                        "spec": {
+                                          "title": "Requests",
+                                          "basicChart": {
+                                            "chartType": "LINE",
+                                            "legendPosition": "BOTTOM_LEGEND",
+                                            "axis": [
+                                              {
+                                                "position": "LEFT_AXIS",
+                                                "title": "Requests"
+                                              }
+                                            ],
+                                            "domains": [
+                                              {
+                                                "domain": {
+                                                  "sourceRange": {
+                                                    "sources": [
+                                                      {
+                                                        "sheetId": 1,
+                                                        "startRowIndex": 0,
+                                                        "endRowIndex": 1,
+                                                        "startColumnIndex": 1,
+                                                        "endColumnIndex": 13
+                                                      }
+                                                    ]
+                                                  }
+                                                }
+                                              }
+                                            ],
+                                            "series": Array(lines2.length - 1).fill(0).map( (x, i) => {
+                                              return {
+                                                series: {
+                                                  sourceRange: {
+                                                    sources: [
+                                                      {
+                                                        sheetId: 1,
+                                                        startRowIndex: i + 1,
+                                                        endRowIndex: i + 2,
+                                                        startColumnIndex: 1,
+                                                        endColumnIndex: 13
+                                                      }
+                                                    ]
+                                                  }
+                                                },
+                                                targetAxis: 'LEFT_AXIS'
+                                              };
+                                            }),
+
+                                            "headerCount": 1
+                                          }
+                                        },
+                                        "position": {
+                                          "newSheet": true
+                                        }
+                                      }
+                                    }
+                                  }
                                 ]
                               }
                             };
 
-                        sheets.spreadsheets.batchUpdate(request, function(e, sheetUpdateResponse) {
+                        sheets.spreadsheets.batchUpdate(batchRequest, function(e, sheetUpdateResponse) {
                           handleError(e);
                           var sheetUrl = sprintf('https://docs.google.com/spreadsheets/d/%s/edit', createResponse.data.spreadsheetId);
                           console.log('sheet url: %s', sheetUrl);
@@ -750,6 +817,13 @@ if ( ! opt.options.org) {
   console.log('You must specify an organization');
   getopt.showHelp();
   process.exit(1);
+}
+
+if (! opt.options.mgmtServer) {
+  opt.options.mgmtServer = defaults.mgmtServer;
+  if (opt.options.verbose) {
+    console.log('using Edge Admin API endpoint: ' + opt.options.mgmtServer);
+  }
 }
 
 if ( ! opt.options.year) {

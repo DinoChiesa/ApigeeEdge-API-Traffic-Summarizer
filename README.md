@@ -33,7 +33,7 @@ Options:
   -n, --netrc        optional. specify in lieu of username to rely on .netrc for credentials.
   -y, --year=ARG     optional. specify a 4-digit year. Default: the current year.
   -v, --verbose      optional. verbose output.
-  -S, --sheet        optional. create a Google Sheet with the data. Default: emit .csv file.
+  -S, --sheet        optional. create a Google Sheet + chart with the data. Default: emit .csv file.
   -N, --nocache      optional. do not use cached data; retrieve from stats API
   -h, --help         display this help
 ```
@@ -49,8 +49,8 @@ Generate a google sheet that summarizes the traffic volume data for the current 
 The user will be prompted to authenticate to Google, in order to grant
 consent to the "API Traffic Summarizer" app to generate a sheet.
 
-While the app requests a scope that allows the tool to create and view sheets, the
-tool merely creates a new sheet. It does not read any existing sheets.
+Though the scope allows the tool to create and view sheets, the tool merely
+creates a new sheet. It does not read any existing sheets stored in Google drive.
 
 When used with the -S option, no .csv file is emitted.
 
@@ -79,5 +79,5 @@ Generate a .csv file that summarizes the traffic volume data for 2017, for an Ed
 
 ## Bugs
 
-* Does not use tokens for authenticating to the Apigee Edge administrative API, won't work in an organization for which single-sign is enabled.
+* Does not use tokens for authenticating to the Apigee Edge administrative API, won't work in an organization for which single-signon is enabled.
 
