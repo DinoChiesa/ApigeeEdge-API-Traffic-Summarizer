@@ -2,7 +2,7 @@
 // ------------------------------------------------------------------
 //
 // created: Tue Aug  7 14:42:00 2018
-// last saved: <2018-September-06 21:30:38>
+// last saved: <2018-September-07 08:27:44>
 //
 
 /* jshint esversion: 6, node: true */
@@ -25,7 +25,7 @@ const request      = require('request'),
       async        = require('async'),
       netrc        = require('netrc')(),
       dateFormat   = require('dateformat'),
-      version      = '20180906-2128',
+      version      = '20180907-0823',
       GOOG_APIS_SCOPES = ['https://www.googleapis.com/auth/spreadsheets'],
       defaults     = {
         dirs : {
@@ -40,7 +40,7 @@ const request      = require('request'),
       ['u' , 'username=ARG', 'optional. username for authenticating to Edge'],
       ['n' , 'netrc', 'optional. specify in lieu of username to rely on .netrc for credentials.'],
       ['P' , 'prior', 'optional. use the prior year or month. Default: the current year/month.'],
-      ['m' , 'bymonth', 'optional. collect data for the month. Default: collect data for the current year.'],
+      ['m' , 'bymonth', 'optional. collect data for the month. Default: collect data for the year.'],
       ['v' , 'verbose', 'optional. verbose output.'],
       ['S' , 'sheet', 'optional. create a Google Sheet with the data. Default: emit .csv file.'],
       ['N' , 'nocache', 'optional. do not use cached data; retrieve from stats API']
@@ -368,10 +368,10 @@ function createSheet(label, lines) {
             },
             sheets : [
               {
-                "properties": { sheetId : 0, title: sheetTitles[0] }
+                properties: { sheetId : 0, title: sheetTitles[0] }
               },
               {
-                "properties": { sheetId : 1, title: sheetTitles[1] }
+                properties: { sheetId : 1, title: sheetTitles[1] }
               }
             ]
           }
@@ -392,12 +392,12 @@ function createSheet(label, lines) {
                 values: lines.map(x => x.concat(['']) )
               },
               {
-                // sums of that
+                // formulas that perform sums of that
                 range: sprintf("%s!R[%d]C[%d]:R[%d]C[%d]", sheetTitles[0], lines.length, 3, lines.length, lines[0].length),
                 values: [lines[0].slice(3).map((v, i) => sprintf('=SUM(indirect("R2C%d:R%dC%d",false))', i + 4, lines.length, i + 4 ) )]
               },
               {
-                // percentages for sheet0
+                // formulas that compute total percentages for sheet0
                 range: sprintf("%s!R[%d]C[%d]:R[%d]C[%d]", sheetTitles[0], 1, lines[0].length , lines.length + 1, lines[0].length ),
                 values: lines.map( (x, i) => [ sprintf('=indirect("R%dC%d",false)/indirect("R%dC%d",false)', i + 2, lines[0].length, lines.length + 1, lines[0].length) ] )
               },
@@ -407,12 +407,12 @@ function createSheet(label, lines) {
                 values: lines2.map(x => x.concat(['']) )
               },
               {
-                // sums of that
+                // formulas that compute sums of that
                 range: sprintf("%s!R[%d]C[%d]:R[%d]C[%d]", sheetTitles[1], lines2.length, 2, lines2.length, lines2[0].length),
                 values: [lines2[0].slice(2).map((v, i) => sprintf('=SUM(indirect("R2C%d:R%dC%d",false))', i + 3, lines2.length, i + 3 ) )]
               },
               {
-                // percentages for sheet1
+                // formulas that compute percentages for sheet1
                 range: sprintf("%s!R[%d]C[%d]:R[%d]C[%d]", sheetTitles[1], 1, lines2[0].length , lines2.length + 1, lines2[0].length ),
                 values: lines2.map( (x, i) => [ sprintf('=indirect("R%dC%d",false)/indirect("R%dC%d",false)', i + 2, lines2[0].length, lines2.length + 1, lines2[0].length) ] )
               }
@@ -422,14 +422,15 @@ function createSheet(label, lines) {
                       pushOneUpdate(sheets, createResponse.data.spreadsheetId),
                       function(e, results) {
                         handleError(e);
-                        // now, make some format changes, and finally add a chart
+                        // now, make a series of format changes, and add charts
 
                         var batchRequest = {
                               spreadsheetId: createResponse.data.spreadsheetId,
                               resource: {
                                 requests: [
-                                  // format the numbers in sheet 0
+
                                   {
+                                    // format the numbers in sheet 0
                                     repeatCell: {
                                       range: {
                                         sheetId: 0,
@@ -449,8 +450,9 @@ function createSheet(label, lines) {
                                       fields: "userEnteredFormat.numberFormat"
                                     }
                                   },
-                                  // format the percentages in sheet 0
+
                                   {
+                                    // format the percentages in sheet 0
                                     repeatCell: {
                                       range: {
                                         sheetId: 0,
@@ -471,8 +473,8 @@ function createSheet(label, lines) {
                                     }
                                   },
 
-                                  // bold the sums in sheet 0
                                   {
+                                    // bold the sums in sheet 0
                                     repeatCell: {
                                       range: {
                                         sheetId: 0,
@@ -496,8 +498,8 @@ function createSheet(label, lines) {
                                     }
                                   },
 
-                                  // freeze the header in sheet 0
                                   {
+                                    // freeze the header in sheet 0
                                     updateSheetProperties: {
                                       properties: {
                                         sheetId: 0,
@@ -509,8 +511,8 @@ function createSheet(label, lines) {
                                     }
                                   },
 
-                                  // format the header line in sheet 0
                                   {
+                                    // format the header line in sheet 0
                                     repeatCell: {
                                       range: {
                                         sheetId: 0,
@@ -542,8 +544,8 @@ function createSheet(label, lines) {
                                     }
                                   },
 
-                                  // left justify the first three columns
                                   {
+                                    // left justify the first three columns
                                     repeatCell: {
                                       range: {
                                         sheetId: 0,
@@ -575,29 +577,42 @@ function createSheet(label, lines) {
                                     }
                                   },
 
-                                  // format the numbers in sheet 1
                                   {
-                                    "repeatCell": {
-                                      "range": {
-                                        "sheetId": 1,
-                                        "startRowIndex": 1,
-                                        "endRowIndex": lines2.length + 2,
-                                        "startColumnIndex": 2,
-                                        "endColumnIndex": lines2[0].length+15
+                                    // resize all the columns
+                                    autoResizeDimensions: {
+                                      dimensions: {
+                                        sheetId: 0,
+                                        dimension: "COLUMNS",
+                                        startIndex: 0,
+                                        endIndex: lines[0].length + 1
+                                      }
+                                    }
+                                  },
+
+                                  {
+                                    // format the numbers in sheet 1
+                                    repeatCell: {
+                                      range: {
+                                        sheetId: 1,
+                                        startRowIndex: 1,
+                                        endRowIndex: lines2.length + 2,
+                                        startColumnIndex: 2,
+                                        endColumnIndex: lines2[0].length+1
                                       },
-                                      "cell": {
-                                        "userEnteredFormat": {
-                                          "numberFormat": {
-                                            "type": "NUMBER",
-                                            "pattern": "#,##0"
+                                      cell: {
+                                        userEnteredFormat: {
+                                          numberFormat: {
+                                            type: "NUMBER",
+                                            pattern: "#,##0"
                                           }
                                         }
                                       },
-                                      "fields": "userEnteredFormat.numberFormat"
+                                      fields: "userEnteredFormat.numberFormat"
                                     }
                                   },
-                                  // format the percentages in sheet 1
+
                                   {
+                                    // format the percentages in sheet 1
                                     repeatCell: {
                                       range: {
                                         sheetId: 1,
@@ -618,8 +633,8 @@ function createSheet(label, lines) {
                                     }
                                   },
 
-                                  // bold the sums in sheet 1
                                   {
+                                    // bold the sums in sheet 1
                                     repeatCell: {
                                       range: {
                                         sheetId: 1,
@@ -642,8 +657,9 @@ function createSheet(label, lines) {
                                       fields: "userEnteredFormat(numberFormat,textFormat)"
                                     }
                                   },
-                                  // freeze the header in sheet 1
+
                                   {
+                                    // freeze the header in sheet 1
                                     updateSheetProperties: {
                                       properties: {
                                         sheetId: 1,
@@ -655,8 +671,8 @@ function createSheet(label, lines) {
                                     }
                                   },
 
-                                  // format the header in sheet 1
                                   {
+                                    // format the header in sheet 1
                                     repeatCell: {
                                       range: {
                                         sheetId: 1,
@@ -688,8 +704,8 @@ function createSheet(label, lines) {
                                     }
                                   },
 
-                                  // left justify the first two columns
                                   {
+                                    // left justify the first two columns
                                     repeatCell: {
                                       range: {
                                         sheetId: 1,
@@ -721,8 +737,20 @@ function createSheet(label, lines) {
                                     }
                                   },
 
-                                  // add a chart.
                                   {
+                                    // resize all the columns
+                                    autoResizeDimensions: {
+                                      dimensions: {
+                                        sheetId: 1,
+                                        dimension: "COLUMNS",
+                                        startIndex: 0,
+                                        endIndex: lines2[0].length + 1
+                                      }
+                                    }
+                                  },
+
+                                  {
+                                    // add a chart.
                                     addChart: {
                                       chart: {
                                         spec: {
