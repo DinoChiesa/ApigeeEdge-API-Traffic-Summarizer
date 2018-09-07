@@ -2,7 +2,7 @@
 // ------------------------------------------------------------------
 //
 // created: Tue Aug  7 14:42:00 2018
-// last saved: <2018-September-05 14:37:42>
+// last saved: <2018-September-06 21:30:38>
 //
 
 /* jshint esversion: 6, node: true */
@@ -25,7 +25,7 @@ const request      = require('request'),
       async        = require('async'),
       netrc        = require('netrc')(),
       dateFormat   = require('dateformat'),
-      version      = '20180905-1436',
+      version      = '20180906-2128',
       GOOG_APIS_SCOPES = ['https://www.googleapis.com/auth/spreadsheets'],
       defaults     = {
         dirs : {
@@ -36,10 +36,11 @@ const request      = require('request'),
       },
     getopt = new Getopt([
       ['o' , 'org=ARG', 'required. name of the Edge organization'],
-      ['M' , 'mgmtserver=ARG', 'the base path, including optional port, of the Edge mgmt server. Defaults to ' + defaults.mgmtServer + ' . '],
+      ['M' , 'mgmtserver=ARG', 'the Edge mgmt server endpoint. Defaults to ' + defaults.mgmtServer + ' . '],
       ['u' , 'username=ARG', 'optional. username for authenticating to Edge'],
       ['n' , 'netrc', 'optional. specify in lieu of username to rely on .netrc for credentials.'],
-      ['y' , 'year=ARG', 'optional. specify a 4-digit year. Default: the current year.'],
+      ['P' , 'prior', 'optional. use the prior year or month. Default: the current year/month.'],
+      ['m' , 'bymonth', 'optional. collect data for the month. Default: collect data for the current year.'],
       ['v' , 'verbose', 'optional. verbose output.'],
       ['S' , 'sheet', 'optional. create a Google Sheet with the data. Default: emit .csv file.'],
       ['N' , 'nocache', 'optional. do not use cached data; retrieve from stats API']
@@ -139,7 +140,8 @@ function getEnvironments(cb) {
 
 function retrieveData(options, cb) {
   // time curl -n "$mgmtserver/v1/o/$ORG/e/$ENV/stats/apis?select=sum(message_count)&timeRange=01/01/2018%2000:00~08/01/2018%2000:00&timeUnit=month"
-  var query = sprintf('?select=sum(message_count)&timeUnit=month&timeRange=%s',
+  var query = sprintf('?select=sum(message_count)&timeUnit=%s&timeRange=%s',
+                      options.timeUnit,
                       getTimeRange(options.startTime, options.endTime));
 
   var requestOptions = merge(getRequestOptions(), {
@@ -148,7 +150,8 @@ function retrieveData(options, cb) {
 
   console.log('GET "%s"', requestOptions.url);
   var today = dateFormat(new Date(), "yyyymmdd");
-  var sha = shajs('sha256').update(JSON.stringify(requestOptions))
+  var sha = shajs('sha256')
+    .update(JSON.stringify(requestOptions))
     .update(today)
     .digest('hex');
 
@@ -177,12 +180,50 @@ function retrieveData(options, cb) {
   }
 }
 
-function insertData(dataTable, apiname, date, volume){
+function insertDataByMonth(dataTable, apiname, date, volume) {
   if ( ! dataTable[apiname]) {
-    dataTable[apiname] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    dataTable[apiname] = Array(12).fill(0);
   }
   var month = parseInt(dateFormat(date,'m'));
   dataTable[apiname][month - 1] = volume;
+}
+
+function daysInMonth(date) {
+  var lastDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 0);
+  var result = lastDayOfMonth.getDate();
+  //console.log('days-in-month for %s: %d', dateFormat(date, 'yyyy/mm/dd'), result);
+  return result;
+}
+
+function insertDataByDay(dataTable, apiname, date, volume) {
+  if ( ! dataTable[apiname]) {
+    // an array of zeroes, one for each day in the month
+    dataTable[apiname] = Array(daysInMonth(endTime)).fill(0);
+  }
+  var day = parseInt(dateFormat(date,'d'));
+  dataTable[apiname][day - 1] = volume;
+}
+
+function handleOneMonth(dataTable, dimension) {
+  return function(record) {
+    var date = addOneDay(new Date(record.timestamp));
+    var volume = parseFloat(record.value);
+    if (opt.options.verbose) {
+      console.log(sprintf('%-28s %26s %f', dimension.name, dateFormat(date, "isoDateTime"), volume ));
+    }
+    insertDataByMonth(dataTable, dimension.name, date, volume);
+  };
+}
+
+function handleOneHour(dataTable, dimension) {
+  return function(record) {
+    var moment = addOneDay(new Date(record.timestamp));
+    var volume = parseFloat(record.value);
+    if (opt.options.verbose) {
+      console.log(sprintf('%-28s %26s %f', dimension.name, dateFormat(moment, "isoDateTime"), volume ));
+    }
+    insertDataByDay(dataTable, dimension.name, moment, volume);
+  };
 }
 
 function processJsonAnalyticsData(payload) {
@@ -191,15 +232,11 @@ function processJsonAnalyticsData(payload) {
   if (r.environments[0].dimensions) {
     r.environments[0].dimensions.forEach(function(dimension){
       // dimension.name => api name
-      var messageCount = dimension.metrics[0];
-      messageCount.values.forEach(function(record){
-        var date = addOneDay(new Date(record.timestamp));
-        var volume = parseFloat(record.value);
-        if (opt.options.verbose) {
-          console.log(sprintf('%-28s %26s %f', dimension.name, dateFormat(date, "isoDateTime"), volume ));
-        }
-        insertData(dataTable, dimension.name, date, volume);
-      });
+      var messageCounts = dimension.metrics[0];
+      //console.log('found %d values', messageCounts.values.length);
+      var fn = (chartPeriod.length == 4) ? handleOneMonth(dataTable, dimension) :
+        handleOneHour(dataTable, dimension);
+      messageCounts.values.forEach(fn);
     });
   }
   return dataTable;
@@ -214,7 +251,6 @@ function getDataForOneEnvironment(options){
     });
   };
 }
-
 
 function sleep (time) {
   return new Promise((resolve) => setTimeout(resolve, time));
@@ -274,8 +310,8 @@ function summarizeEnvironments(rawlines) {
   var lines = [];
   //rawlines.forEach(x => { console.log(x); });
   rawlines.forEach((x1, i1) => {
-    const org = x1[1];
-    const env = x1[2];
+    const org = x1[0];
+    const env = x1[1];
     var line = lines.find( x => { return (x[0] ==org) && (x[1] == env); });
 
     if (line) {
@@ -345,35 +381,40 @@ function createSheet(label, lines) {
       handleError(e);
       // import data, and add sum formuli, produce chart
       const lines2 = summarizeEnvironments(lines);
-      const columnLetters = Array(16).fill(0).map( (x, i) => String.fromCharCode(65 + i));
 
       // A single .batchUpdate() call failed with a HTTP 413 "Entity Too Large",
       // because the data is too large. To avoid that, this system makes N
       // requests in series.
       const updateData = [
               {
-                range: sprintf("%s!A1:P%d", sheetTitles[0], lines.length+1),
-                values: lines
+                // raw data
+                range: sprintf("%s!R[0]C[0]:R[%d]C[%d]", sheetTitles[0], lines.length, lines[0].length + 1),
+                values: lines.map(x => x.concat(['']) )
               },
               {
-                range: sprintf("%s!D%d:P%d", sheetTitles[0], lines.length +1, lines.length +1),
-                values: [columnLetters.slice(3).map(c => sprintf("=SUM(%s2:%s%d)", c, c, lines.length))]
+                // sums of that
+                range: sprintf("%s!R[%d]C[%d]:R[%d]C[%d]", sheetTitles[0], lines.length, 3, lines.length, lines[0].length),
+                values: [lines[0].slice(3).map((v, i) => sprintf('=SUM(indirect("R2C%d:R%dC%d",false))', i + 4, lines.length, i + 4 ) )]
               },
               {
-                range: sprintf("%s!A1:O%d", sheetTitles[1], lines2.length +1),
-                values: lines2
+                // percentages for sheet0
+                range: sprintf("%s!R[%d]C[%d]:R[%d]C[%d]", sheetTitles[0], 1, lines[0].length , lines.length + 1, lines[0].length ),
+                values: lines.map( (x, i) => [ sprintf('=indirect("R%dC%d",false)/indirect("R%dC%d",false)', i + 2, lines[0].length, lines.length + 1, lines[0].length) ] )
               },
               {
-                range: sprintf("%s!C%d:O%d", sheetTitles[1], lines2.length +1, lines2.length +1),
-                values: [columnLetters.slice(2, -1).map(c => sprintf("=SUM(%s2:%s%d)", c, c, lines2.length))]
+                // raw data summarized by environment
+                range: sprintf("%s!R[0]C[0]:R[%d]C[%d]", sheetTitles[1], lines2.length, lines2[0].length + 1),
+                values: lines2.map(x => x.concat(['']) )
               },
               {
-                range: sprintf("%s!Q2:Q%d", sheetTitles[0], lines.length +1),
-                values: Array(lines.length).fill(0).map( (x, i) => [sprintf("=P%d/P$%d", i + 2, lines.length + 1)])
+                // sums of that
+                range: sprintf("%s!R[%d]C[%d]:R[%d]C[%d]", sheetTitles[1], lines2.length, 2, lines2.length, lines2[0].length),
+                values: [lines2[0].slice(2).map((v, i) => sprintf('=SUM(indirect("R2C%d:R%dC%d",false))', i + 3, lines2.length, i + 3 ) )]
               },
               {
-                range: sprintf("%s!P2:P%d", sheetTitles[1], lines2.length +1),
-                values: Array(lines2.length).fill(0).map( (x, i) => [sprintf("=O%d/O$%d", i + 2, lines2.length + 1)])
+                // percentages for sheet1
+                range: sprintf("%s!R[%d]C[%d]:R[%d]C[%d]", sheetTitles[1], 1, lines2[0].length , lines2.length + 1, lines2[0].length ),
+                values: lines2.map( (x, i) => [ sprintf('=indirect("R%dC%d",false)/indirect("R%dC%d",false)', i + 2, lines2[0].length, lines2.length + 1, lines2[0].length) ] )
               }
             ];
 
@@ -382,6 +423,7 @@ function createSheet(label, lines) {
                       function(e, results) {
                         handleError(e);
                         // now, make some format changes, and finally add a chart
+
                         var batchRequest = {
                               spreadsheetId: createResponse.data.spreadsheetId,
                               resource: {
@@ -389,147 +431,150 @@ function createSheet(label, lines) {
                                   // format the numbers in sheet 0
                                   {
                                     repeatCell: {
-                                      "range": {
-                                        "sheetId": 0,
-                                        "startRowIndex": 1,
-                                        "endRowIndex": lines.length + 2,
-                                        "startColumnIndex": 3,
-                                        "endColumnIndex": 16
+                                      range: {
+                                        sheetId: 0,
+                                        startRowIndex: 1,
+                                        endRowIndex: lines.length + 1,
+                                        startColumnIndex: 3,
+                                        endColumnIndex: lines[0].length + 1
                                       },
-                                      "cell": {
-                                        "userEnteredFormat": {
-                                          "numberFormat": {
-                                            "type": "NUMBER",
-                                            "pattern": "#,##0"
+                                      cell: {
+                                        userEnteredFormat: {
+                                          numberFormat: {
+                                            type: "NUMBER",
+                                            pattern: "#,##0"
                                           }
                                         }
                                       },
-                                      "fields": "userEnteredFormat.numberFormat"
+                                      fields: "userEnteredFormat.numberFormat"
                                     }
                                   },
                                   // format the percentages in sheet 0
                                   {
-                                    "repeatCell": {
-                                      "range": {
-                                        "sheetId": 0,
-                                        "startRowIndex": 1,
-                                        "endRowIndex": lines.length + 2,
-                                        "startColumnIndex": 16,
-                                        "endColumnIndex": 17
+                                    repeatCell: {
+                                      range: {
+                                        sheetId: 0,
+                                        startRowIndex: 1,
+                                        endRowIndex: lines.length + 1,
+                                        startColumnIndex: lines[0].length ,
+                                        endColumnIndex: lines[0].length + 1
                                       },
-                                      "cell": {
-                                        "userEnteredFormat": {
-                                          "numberFormat": {
-                                            "type": "NUMBER",
-                                            "pattern": "0.00%"
+                                      cell: {
+                                        userEnteredFormat: {
+                                          numberFormat: {
+                                            type: "NUMBER",
+                                            pattern: "0.00%"
                                           }
                                         }
                                       },
-                                      "fields": "userEnteredFormat.numberFormat"
+                                      fields: "userEnteredFormat.numberFormat"
                                     }
                                   },
 
                                   // bold the sums in sheet 0
                                   {
-                                    "repeatCell": {
-                                      "range": {
-                                        "sheetId": 0,
-                                        "startRowIndex": lines.length,
-                                        "endRowIndex": lines.length + 1,
-                                        "startColumnIndex": 3,
-                                        "endColumnIndex": 16
+                                    repeatCell: {
+                                      range: {
+                                        sheetId: 0,
+                                        startRowIndex: lines.length,
+                                        endRowIndex: lines.length + 1,
+                                        startColumnIndex: 3,
+                                        endColumnIndex: lines[0].length
                                       },
-                                      "cell": {
-                                        "userEnteredFormat": {
-                                          "numberFormat": {
-                                            "type": "NUMBER",
-                                            "pattern": "#,##0"
+                                      cell: {
+                                        userEnteredFormat: {
+                                          numberFormat: {
+                                            type: "NUMBER",
+                                            pattern: "#,##0"
                                           },
-                                          "textFormat": {
-                                            "bold": true
+                                          textFormat: {
+                                            bold: true
                                           }
                                         }
                                       },
-                                      "fields": "userEnteredFormat(numberFormat,textFormat)"
+                                      fields: "userEnteredFormat(numberFormat,textFormat)"
                                     }
                                   },
+
                                   // freeze the header in sheet 0
                                   {
-                                    "updateSheetProperties": {
-                                      "properties": {
-                                        "sheetId": 0,
-                                        "gridProperties": {
-                                          "frozenRowCount": 1
+                                    updateSheetProperties: {
+                                      properties: {
+                                        sheetId: 0,
+                                        gridProperties: {
+                                          frozenRowCount: 1
                                         }
                                       },
-                                      "fields": "gridProperties.frozenRowCount"
+                                      fields: "gridProperties.frozenRowCount"
                                     }
                                   },
+
                                   // format the header line in sheet 0
                                   {
-                                    "repeatCell": {
-                                      "range": {
-                                        "sheetId": 0,
-                                        "startRowIndex": 0,
-                                        "endRowIndex": 1,
-                                        "startColumnIndex": 3,
-                                        "endColumnIndex": 16
+                                    repeatCell: {
+                                      range: {
+                                        sheetId: 0,
+                                        startRowIndex: 0,
+                                        endRowIndex: 1,
+                                        startColumnIndex: 3,
+                                        endColumnIndex: lines[0].length + 1
                                       },
-                                      "cell": {
-                                        "userEnteredFormat": {
-                                          "backgroundColor": {
-                                            "red": 0.0,
-                                            "green": 0.0,
-                                            "blue": 0.0
+                                      cell: {
+                                        userEnteredFormat: {
+                                          backgroundColor: {
+                                            red: 0.0,
+                                            green: 0.0,
+                                            blue: 0.0
                                           },
-                                          "horizontalAlignment" : "RIGHT",
-                                          "textFormat": {
-                                            "foregroundColor": {
-                                              "red": 1.0,
-                                              "green": 1.0,
-                                              "blue": 1.0
+                                          horizontalAlignment : "RIGHT",
+                                          textFormat: {
+                                            foregroundColor: {
+                                              red: 1.0,
+                                              green: 1.0,
+                                              blue: 1.0
                                             },
-                                            "fontSize": 12,
-                                            "bold": true
+                                            fontSize: 12,
+                                            bold: true
                                           }
                                         }
                                       },
-                                      "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"
+                                      fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"
                                     }
                                   },
 
                                   // left justify the first three columns
                                   {
-                                    "repeatCell": {
-                                      "range": {
-                                        "sheetId": 0,
-                                        "startRowIndex": 0,
-                                        "endRowIndex": 1,
-                                        "startColumnIndex": 0,
-                                        "endColumnIndex": 3
+                                    repeatCell: {
+                                      range: {
+                                        sheetId: 0,
+                                        startRowIndex: 0,
+                                        endRowIndex: 1,
+                                        startColumnIndex: 0,
+                                        endColumnIndex: 3
                                       },
-                                      "cell": {
-                                        "userEnteredFormat": {
-                                          "backgroundColor": {
-                                            "red": 0.0,
-                                            "green": 0.0,
-                                            "blue": 0.0
+                                      cell: {
+                                        userEnteredFormat: {
+                                          backgroundColor: {
+                                            red: 0.0,
+                                            green: 0.0,
+                                            blue: 0.0
                                           },
-                                          "horizontalAlignment" : "LEFT",
-                                          "textFormat": {
-                                            "foregroundColor": {
-                                              "red": 1.0,
-                                              "green": 1.0,
-                                              "blue": 1.0
+                                          horizontalAlignment : "LEFT",
+                                          textFormat: {
+                                            foregroundColor: {
+                                              red: 1.0,
+                                              green: 1.0,
+                                              blue: 1.0
                                             },
-                                            "fontSize": 12,
-                                            "bold": true
+                                            fontSize: 12,
+                                            bold: true
                                           }
                                         }
                                       },
-                                      "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"
+                                      fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"
                                     }
                                   },
+
                                   // format the numbers in sheet 1
                                   {
                                     "repeatCell": {
@@ -538,7 +583,7 @@ function createSheet(label, lines) {
                                         "startRowIndex": 1,
                                         "endRowIndex": lines2.length + 2,
                                         "startColumnIndex": 2,
-                                        "endColumnIndex": 15
+                                        "endColumnIndex": lines2[0].length+15
                                       },
                                       "cell": {
                                         "userEnteredFormat": {
@@ -553,160 +598,222 @@ function createSheet(label, lines) {
                                   },
                                   // format the percentages in sheet 1
                                   {
-                                    "repeatCell": {
-                                      "range": {
-                                        "sheetId": 1,
-                                        "startRowIndex": 1,
-                                        "endRowIndex": lines2.length + 2,
-                                        "startColumnIndex": 15,
-                                        "endColumnIndex": 16
+                                    repeatCell: {
+                                      range: {
+                                        sheetId: 1,
+                                        startRowIndex: 1,
+                                        endRowIndex: lines2.length + 1,
+                                        startColumnIndex: lines2[0].length ,
+                                        endColumnIndex: lines2[0].length + 1
                                       },
-                                      "cell": {
-                                        "userEnteredFormat": {
-                                          "numberFormat": {
-                                            "type": "NUMBER",
-                                            "pattern": "0.00%"
+                                      cell: {
+                                        userEnteredFormat: {
+                                          numberFormat: {
+                                            type: "NUMBER",
+                                            pattern: "0.00%"
                                           }
                                         }
                                       },
-                                      "fields": "userEnteredFormat.numberFormat"
+                                      fields: "userEnteredFormat.numberFormat"
                                     }
                                   },
+
                                   // bold the sums in sheet 1
                                   {
-                                    "repeatCell": {
-                                      "range": {
-                                        "sheetId": 1,
-                                        "startRowIndex": lines2.length,
-                                        "endRowIndex": lines2.length + 1,
-                                        "startColumnIndex": 2,
-                                        "endColumnIndex": 15
+                                    repeatCell: {
+                                      range: {
+                                        sheetId: 1,
+                                        startRowIndex: lines2.length,
+                                        endRowIndex: lines2.length + 1,
+                                        startColumnIndex: 2,
+                                        endColumnIndex: lines2[0].length
                                       },
-                                      "cell": {
-                                        "userEnteredFormat": {
-                                          "numberFormat": {
-                                            "type": "NUMBER",
-                                            "pattern": "#,##0"
+                                      cell: {
+                                        userEnteredFormat: {
+                                          numberFormat: {
+                                            type: "NUMBER",
+                                            pattern: "#,##0"
                                           },
-                                          "textFormat": {
-                                            "bold": true
+                                          textFormat: {
+                                            bold: true
                                           }
                                         }
                                       },
-                                      "fields": "userEnteredFormat(numberFormat,textFormat)"
+                                      fields: "userEnteredFormat(numberFormat,textFormat)"
                                     }
                                   },
                                   // freeze the header in sheet 1
                                   {
-                                    "updateSheetProperties": {
-                                      "properties": {
-                                        "sheetId": 1,
-                                        "gridProperties": {
-                                          "frozenRowCount": 1
+                                    updateSheetProperties: {
+                                      properties: {
+                                        sheetId: 1,
+                                        gridProperties: {
+                                          frozenRowCount: 1
                                         }
                                       },
-                                      "fields": "gridProperties.frozenRowCount"
+                                      fields: "gridProperties.frozenRowCount"
                                     }
                                   },
+
                                   // format the header in sheet 1
                                   {
-                                    "repeatCell": {
-                                      "range": {
-                                        "sheetId": 1,
-                                        "startRowIndex": 0,
-                                        "endRowIndex": 1,
-                                        "startColumnIndex": 2,
-                                        "endColumnIndex": 15
+                                    repeatCell: {
+                                      range: {
+                                        sheetId: 1,
+                                        startRowIndex: 0,
+                                        endRowIndex: 1,
+                                        startColumnIndex: 2,
+                                        endColumnIndex: lines2[0].length + 1
                                       },
-                                      "cell": {
-                                        "userEnteredFormat": {
-                                          "backgroundColor": {
-                                            "red": 0.0,
-                                            "green": 0.0,
-                                            "blue": 0.0
+                                      cell: {
+                                        userEnteredFormat: {
+                                          backgroundColor: {
+                                            red: 0.0,
+                                            green: 0.0,
+                                            blue: 0.0
                                           },
-                                          "horizontalAlignment" : "RIGHT",
-                                          "textFormat": {
-                                            "foregroundColor": {
-                                              "red": 1.0,
-                                              "green": 1.0,
-                                              "blue": 1.0
+                                          horizontalAlignment : "RIGHT",
+                                          textFormat: {
+                                            foregroundColor: {
+                                              red: 1.0,
+                                              green: 1.0,
+                                              blue: 1.0
                                             },
-                                            "fontSize": 12,
-                                            "bold": true
+                                            fontSize: 12,
+                                            bold: true
                                           }
                                         }
                                       },
-                                      "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"
+                                      fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"
                                     }
                                   },
 
                                   // left justify the first two columns
                                   {
-                                    "repeatCell": {
-                                      "range": {
-                                        "sheetId": 1,
-                                        "startRowIndex": 0,
-                                        "endRowIndex": 1,
-                                        "startColumnIndex": 0,
-                                        "endColumnIndex": 2
+                                    repeatCell: {
+                                      range: {
+                                        sheetId: 1,
+                                        startRowIndex: 0,
+                                        endRowIndex: 1,
+                                        startColumnIndex: 0,
+                                        endColumnIndex: 2
                                       },
-                                      "cell": {
-                                        "userEnteredFormat": {
-                                          "backgroundColor": {
-                                            "red": 0.0,
-                                            "green": 0.0,
-                                            "blue": 0.0
+                                      cell: {
+                                        userEnteredFormat: {
+                                          backgroundColor: {
+                                            red: 0.0,
+                                            green: 0.0,
+                                            blue: 0.0
                                           },
-                                          "horizontalAlignment" : "LEFT",
-                                          "textFormat": {
-                                            "foregroundColor": {
-                                              "red": 1.0,
-                                              "green": 1.0,
-                                              "blue": 1.0
+                                          horizontalAlignment : "LEFT",
+                                          textFormat: {
+                                            foregroundColor: {
+                                              red: 1.0,
+                                              green: 1.0,
+                                              blue: 1.0
                                             },
-                                            "fontSize": 12,
-                                            "bold": true
+                                            fontSize: 12,
+                                            bold: true
                                           }
                                         }
                                       },
-                                      "fields": "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"
+                                      fields: "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)"
                                     }
                                   },
 
-                                  // Finally, add a chart.
+                                  // add a chart.
                                   {
-                                    "addChart": {
-                                      "chart": {
-                                        "spec": {
-                                          "title": "Requests",
-                                          "basicChart": {
-                                            "chartType": "LINE",
-                                            "legendPosition": "BOTTOM_LEGEND",
-                                            "axis": [
+                                    addChart: {
+                                      chart: {
+                                        spec: {
+                                          title: "Requests",
+                                          basicChart: {
+                                            chartType: "LINE",
+                                            legendPosition: "BOTTOM_LEGEND",
+                                            axis: [
                                               {
-                                                "position": "LEFT_AXIS",
-                                                "title": "Requests"
+                                                position: "LEFT_AXIS",
+                                                title: "Requests"
                                               }
                                             ],
-                                            "domains": [
-                                              {
-                                                "domain": {
-                                                  "sourceRange": {
-                                                    "sources": [
+                                            // domains: [
+                                            //   {
+                                            //     domain: {
+                                            //       sourceRange: {
+                                            //         sources: [
+                                            //           {
+                                            //             sheetId: 0,
+                                            //             startRowIndex: 0,
+                                            //             endRowIndex: 1,
+                                            //             startColumnIndex: 1,
+                                            //             endColumnIndex:  lines[0].length + 1
+                                            //           }
+                                            //         ]
+                                            //       }
+                                            //     }
+                                            //   }
+                                            // ],
+                                            series: Array(lines.length - 1).fill(0).map( (x, i) => {
+                                              return {
+                                                series: {
+                                                  sourceRange: {
+                                                    sources: [
                                                       {
-                                                        "sheetId": 1,
-                                                        "startRowIndex": 0,
-                                                        "endRowIndex": 1,
-                                                        "startColumnIndex": 1,
-                                                        "endColumnIndex": 13
+                                                        sheetId: 0,
+                                                        startRowIndex: i + 1,
+                                                        endRowIndex: i + 2,
+                                                        startColumnIndex: 2,
+                                                        endColumnIndex: lines[0].length - 1
                                                       }
                                                     ]
                                                   }
-                                                }
+                                                },
+                                                targetAxis: 'LEFT_AXIS'
+                                              };
+                                            }),
+                                            headerCount: 0
+                                          }
+                                        },
+                                        position: {
+                                          newSheet: true
+                                        }
+                                      }
+                                    }
+                                  },
+
+                                  // add a second chart.
+                                  {
+                                    addChart: {
+                                      chart: {
+                                        spec: {
+                                          title: "Requests",
+                                          basicChart: {
+                                            chartType: "LINE",
+                                            legendPosition: "BOTTOM_LEGEND",
+                                            axis: [
+                                              {
+                                                position: "LEFT_AXIS",
+                                                title: "Requests"
                                               }
                                             ],
-                                            "series": Array(lines2.length - 1).fill(0).map( (x, i) => {
+                                            // domains: [
+                                            //   {
+                                            //     domain: {
+                                            //       sourceRange: {
+                                            //         sources: [
+                                            //           {
+                                            //             sheetId: 1,
+                                            //             startRowIndex: 0,
+                                            //             endRowIndex: 1,
+                                            //             startColumnIndex: 1,
+                                            //             endColumnIndex: lines2[0].length + 1
+                                            //           }
+                                            //         ]
+                                            //       }
+                                            //     }
+                                            //   }
+                                            // ],
+                                            series: Array(lines2.length - 1).fill(0).map( (x, i) => {
                                               return {
                                                 series: {
                                                   sourceRange: {
@@ -716,7 +823,7 @@ function createSheet(label, lines) {
                                                         startRowIndex: i + 1,
                                                         endRowIndex: i + 2,
                                                         startColumnIndex: 1,
-                                                        endColumnIndex: 13
+                                                        endColumnIndex: lines2[0].length - 1
                                                       }
                                                     ]
                                                   }
@@ -725,17 +832,18 @@ function createSheet(label, lines) {
                                               };
                                             }),
 
-                                            "headerCount": 1
+                                            headerCount: 1
                                           }
                                         },
-                                        "position": {
-                                          "newSheet": true
+                                        position: {
+                                          newSheet: true
                                         }
                                       }
                                     }
-                                  }
-                                ]
-                              }
+                                  },
+
+                                 ]
+                               }
                             };
 
                         sheets.spreadsheets.batchUpdate(batchRequest, function(e, sheetUpdateResponse) {
@@ -763,7 +871,6 @@ function emitCsvFile(label, lines) {
   stream.end();
 }
 
-
 function doneAllEnvironments(e, results) {
   handleError(e);
 
@@ -773,24 +880,33 @@ function doneAllEnvironments(e, results) {
   }
 
   var lines = [];
-  var line = ["apiname", "org", "env"]
-    .concat("Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec".split(',').map( m => m + '-2018'))
-    .concat(["Total"]);
-  lines.push(line);
+  var headerLine = ["org", "env", "apiname"];
+
+  if (chartPeriod.length == 4) {
+    headerLine = headerLine.concat("Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec".split(',').map( m => m + '-' + chartPeriod ));
+  }
+  else {
+    // dynamic number of columns => number of days in the month
+    headerLine = headerLine.concat(Array(daysInMonth(endTime)).fill(0).map( (x, i) => (i + 1)));
+  }
+
+  headerLine = headerLine.concat(["Total"]);
+  lines.push(headerLine);
 
   const add = (a, b) => a + b;
   results.forEach(function(dataTable) {
    Object.keys(dataTable.data).sort().forEach(function(key) {
      const row = dataTable.data[key];
-     const sum = row.reduce(add) ;
-     line = [key, opt.options.org, dataTable.environment]
+     //console.log('row: ' + JSON.stringify(row));
+     const sum = row.reduce(add);
+     var line = [opt.options.org, dataTable.environment, key]
        .concat(row)
        .concat([sum]);
      lines.push(line);
    });
   });
 
-  const label = sprintf('by-api--%s-%s', opt.options.org, opt.options.year);
+  const label = sprintf('by-api--%s-%s', opt.options.org, chartPeriod);
   if (opt.options.sheet) {
     const clientCredentialsFile = path.join(".", "gsheets_client_credentials.json");
     fs.readFile(clientCredentialsFile, (e, content) => {
@@ -826,24 +942,52 @@ if (! opt.options.mgmtServer) {
   }
 }
 
-if ( ! opt.options.year) {
-  opt.options.year = new Date().getFullYear();
+var now = new Date();
+var endTime, startTime, timeUnit, chartPeriod;
+
+if (opt.options.prior) {
+  if (opt.options.bymonth) {
+    timeUnit = 'day';
+    startTime = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    endTime = new Date(now.getFullYear(), now.getMonth(), 0);
+    chartPeriod = dateFormat(endTime, 'yyyymm');
+  }
+  else {
+    timeUnit = 'month';
+    startTime = new Date(now.getFullYear() - 1, 0, 1);
+    endTime = new Date(now.getFullYear() - 1, 11, 31);
+    chartPeriod = dateFormat(endTime, 'yyyy');
+  }
+}
+else {
+  if (opt.options.bymonth) {
+    timeUnit = 'day';
+    startTime = new Date(now.getFullYear(), now.getMonth(), 1);
+    endTime = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    chartPeriod = dateFormat(endTime, 'yyyymm');
+  }
+  else {
+    timeUnit = 'month';
+    startTime = new Date(now.getFullYear(), 0, 1);
+    endTime = new Date(now.getFullYear(), 11, 31);
+    chartPeriod = dateFormat(endTime, 'yyyy');
+  }
 }
 
 if (opt.options.verbose) {
-  console.log('using year: ' + opt.options.year);
+  console.log('using period ending: ' + dateFormat(startTime, 'mm/dd/yyyy'));
 }
+
+var options = {
+      organization : opt.options.org,
+      nocache : opt.options.nocache,
+      startTime: startTime,
+      endTime : endTime,
+      timeUnit : timeUnit
+    };
 
 getEnvironments(function(e, environments){
   handleError(e);
-  var firstDayOfYear = new Date(parseInt(opt.options.year), 0, 1);
-  var lastDayOfYear = new Date(parseInt(opt.options.year), 11, 31);
-  var options = {
-        organization : opt.options.org,
-        startTime: firstDayOfYear,
-        endTime : lastDayOfYear,
-        nocache : opt.options.nocache
-      };
   async.mapSeries(environments,
                   getDataForOneEnvironment(options),
                   doneAllEnvironments);

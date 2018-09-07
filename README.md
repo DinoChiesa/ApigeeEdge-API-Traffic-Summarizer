@@ -20,7 +20,7 @@ and is licensed under the Apache 2.0 license. See the [LICENSE](LICENSE) file.
 
 ```
 $  node ./trafficByApiSummarizer.js
-Apigee Edge Analytics Summarizer tool, version: 20180808-0850
+Apigee Edge Analytics Summarizer tool, version: 20180906-2128
 Node.js v10.5.0
 
 You must specify an organization
@@ -28,14 +28,16 @@ Usage:
   node trafficByApiSummarizer.js [OPTION]
 
 Options:
-  -o, --org=ARG      required. name of the Edge organization
-  -u, --username=ARG optional. username for authenticating to Edge
-  -n, --netrc        optional. specify in lieu of username to rely on .netrc for credentials.
-  -y, --year=ARG     optional. specify a 4-digit year. Default: the current year.
-  -v, --verbose      optional. verbose output.
-  -S, --sheet        optional. create a Google Sheet + chart with the data. Default: emit .csv file.
-  -N, --nocache      optional. do not use cached data; retrieve from stats API
-  -h, --help         display this help
+  -o, --org=ARG        required. name of the Edge organization
+  -M, --mgmtserver=ARG the Edge mgmt server endpoint. Defaults to https://api.enterprise.apigee.com .
+  -u, --username=ARG   optional. username for authenticating to Edge
+  -n, --netrc          optional. specify in lieu of username to rely on .netrc for credentials.
+  -P, --prior          optional. use the prior year or month. Default: the current year/month.
+  -m, --bymonth        optional. collect data for the month. Default: collect data for the current year.
+  -v, --verbose        optional. verbose output.
+  -S, --sheet          optional. create a Google Sheet with the data. Default: emit .csv file.
+  -N, --nocache        optional. do not use cached data; retrieve from stats API
+  -h, --help           display this help
 ```
 
 ## Example 1
@@ -75,6 +77,13 @@ Generate a .csv file that summarizes the traffic volume data for 2017, for an Ed
  node ./trafficByApiSummarizer.js -n -o my-org-name -y 2017
 ```
 
+## Example 4
+
+Generate a google sheet that summarizes the traffic volume data for the prior month, for an organization.
+
+```
+ node ./trafficByApiSummarizer.js -n -o my-org-name -m -P -S
+```
 
 
 ## Bugs
