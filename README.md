@@ -49,10 +49,20 @@ Generate a google sheet that summarizes the traffic volume data for the current 
 ```
 
 The user will be prompted to authenticate to Google, in order to grant
-consent to the "API Traffic Summarizer" app to generate a sheet.
+consent to the "API Traffic Summarizer" app to generate a spreadsheet.
 
 Though the scope allows the tool to create and view sheets, the tool merely
 creates a new sheet. It does not read any existing sheets stored in Google drive.
+
+The tool will create a spreadsheet with 2 sheets and 2 charts; one sheet will
+list the "per API Proxy" traffic volumes, and one will summarize the traffic by
+environment.  Then 2 charts corresponding to the data in those sheets.
+
+
+![Sheet1](images/screenshot-20180907-083518.png "per-API Proxy traffic sheet")
+
+![Chart1](images/screenshot-20180907-083533.png "per-API Proxy traffic chart")
+
 
 When used with the -S option, no .csv file is emitted.
 
@@ -65,16 +75,16 @@ Generate a .csv file that summarizes the traffic volume data for the current yea
  node ./trafficByApiSummarizer.js -n -o my-org-name
 ```
 
-When used without the -S option, a .csv file is emitted, and no Google sheet is created.
+When used without the -S option, a .csv file is emitted, and no Google sheet is created. The .csv file includes the raw "per API proxy" data.  It does not include a rollup of "per environment".
 
 
 ## Example 3
 
-Generate a .csv file that summarizes the traffic volume data for 2017, for an Edge organization.
+Generate a .csv file that summarizes the traffic volume data for the prior year (-P), currently 2017, for an Edge organization.
 
 
 ```
- node ./trafficByApiSummarizer.js -n -o my-org-name -y 2017
+ node ./trafficByApiSummarizer.js -n -o my-org-name -P
 ```
 
 ## Example 4
@@ -89,4 +99,3 @@ Generate a google sheet that summarizes the traffic volume data for the prior mo
 ## Bugs
 
 * Does not use tokens for authenticating to the Apigee Edge administrative API, won't work in an organization for which single-signon is enabled.
-
