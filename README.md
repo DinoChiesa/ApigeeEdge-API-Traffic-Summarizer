@@ -5,7 +5,7 @@ This tool queries the Edge Analytics API to retrieve message_count (traffic volu
 There are two options for output:
 
 - emit into a .csv file, which can then be imported into a Spreadsheet for further analysis.
-- automatically generate a Google Sheet containing the data
+- automatically generate a Google Sheet containing the data. This also generates charts.
 
 ## Disclaimer
 
@@ -98,4 +98,5 @@ Generate a google sheet that summarizes the traffic volume data for the prior mo
 
 ## Bugs
 
-* Does not use tokens for authenticating to the Apigee Edge administrative API, won't work in an organization for which single-signon is enabled.
+none?
+

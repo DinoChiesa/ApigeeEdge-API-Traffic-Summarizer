@@ -2,7 +2,7 @@
 // ------------------------------------------------------------------
 //
 // created: Tue Aug  7 14:42:00 2018
-// last saved: <2018-September-07 08:27:44>
+// last saved: <2018-October-15 18:06:54>
 //
 
 /* jshint esversion: 6, node: true */
@@ -10,10 +10,12 @@
 
 'use strict';
 
-const request      = require('request'),
+const edgejs     = require('apigee-edge-js'),
+      common     = edgejs.utility,
+      apigeeEdge = edgejs.edge,
+      request      = require('request'),
       urljoin      = require('url-join'),
       sprintf      = require('sprintf-js').sprintf,
-      shajs        = require('sha.js'),
       opn          = require('opn'),
       {google}     = require('googleapis'),
       fs           = require('fs'),
@@ -25,7 +27,7 @@ const request      = require('request'),
       async        = require('async'),
       netrc        = require('netrc')(),
       dateFormat   = require('dateformat'),
-      version      = '20180907-0823',
+      version      = '20181015-1717',
       GOOG_APIS_SCOPES = ['https://www.googleapis.com/auth/spreadsheets'],
       defaults     = {
         dirs : {
@@ -34,21 +36,16 @@ const request      = require('request'),
         },
         mgmtServer: 'https://api.enterprise.apigee.com'
       },
-    getopt = new Getopt([
-      ['o' , 'org=ARG', 'required. name of the Edge organization'],
-      ['M' , 'mgmtserver=ARG', 'the Edge mgmt server endpoint. Defaults to ' + defaults.mgmtServer + ' . '],
-      ['u' , 'username=ARG', 'optional. username for authenticating to Edge'],
-      ['n' , 'netrc', 'optional. specify in lieu of username to rely on .netrc for credentials.'],
+    getopt = new Getopt(common.commonOptions.concat([
       ['P' , 'prior', 'optional. use the prior year or month. Default: the current year/month.'],
       ['m' , 'bymonth', 'optional. collect data for the month. Default: collect data for the year.'],
-      ['v' , 'verbose', 'optional. verbose output.'],
       ['S' , 'sheet', 'optional. create a Google Sheet with the data. Default: emit .csv file.'],
       ['N' , 'nocache', 'optional. do not use cached data; retrieve from stats API']
-    ]).bindHelp();
+    ])).bindHelp();
 
 function handleError(e) {
   if (e) {
-    console.log('Error: ' + e);
+    common.logWrite('Error: ' + JSON.stringify(e, null, 2));
     process.exit(1);
   }
 }
@@ -70,115 +67,48 @@ function memoize( fn ) {
   };
 }
 
-function utcOffset_apigeeTimeFormat(date) {
-  var s = dateFormat(date, "isoUtcDateTime");
-  s = s.slice(0, -4);
-  return s.slice(-5);
-}
-
 function addOneDay(date){
   date.setDate(date.getDate() + 1);
   return date;
-}
-
-function getTimeRange(start, end) {
-  start = dateFormat(start, 'mm/dd/yyyy') + ' ' + utcOffset_apigeeTimeFormat(start);
-  end = dateFormat(end, 'mm/dd/yyyy') + ' ' + utcOffset_apigeeTimeFormat(end);
-  return start + '~' + end;
 }
 
 function base64Encode(s) {
   return new Buffer.from(s).toString('base64');
 }
 
-const getBasicAuthHeader = memoize(function(mgmtServer) {
-        if (opt.options.netrc) {
-          var mgmtUrl = require('url').parse(mgmtServer);
-          if ( ! netrc[mgmtUrl.hostname]) {
-            throw new Error("there is no entry for the management server in in the .netrc file.");
-          }
-          return 'Basic ' + base64Encode(netrc[mgmtUrl.hostname].login + ':' + netrc[mgmtUrl.hostname].password);
-        }
 
-        console.log('\nAuthenticate to %s', mgmtServer);
-        var username = opt.options.username;
-        if ( !username ) {
-          username = readlineSync.question('USER NAME: ');
-        }
-        // this script never accepts passwords on the command line.
-        console.log();
-        var password = readlineSync.question('Password for ' + username + ' : ', {hideEchoBack: true});
-        return 'Basic ' + base64Encode(username + ':' + password);
-      });
-
-function getRequestOptions() {
-  return {
-    method : 'GET',
-    headers : {
-      authorization : getBasicAuthHeader(opt.options.mgmtServer),
-      accept : 'application/json'
-    }
-  };
+function readCachedFile(url, sha) {
+  if (options.nocache) { return false; }
+  let today = dateFormat(new Date(), "yyyymmdd");
+  let cacheFileName = path.join(defaults.dirs.cache, sha + '--' + today + '.json');
+  if (fs.existsSync(cacheFileName)) {
+    console.log('cached data exists.');
+    var text = fs.readFileSync(cacheFileName,'utf8');
+    return { data: text };
+  }
+  return { cachefile: cacheFileName };
 }
 
-function getEnvironments(cb) {
-  var requestOptions = merge(getRequestOptions(), {
-        url : urljoin(opt.options.mgmtServer, 'v1/o', opt.options.org)
-      });
 
-  console.log('GET "%s"', requestOptions.url);
-  request(requestOptions, function(error, response, body){
+function retrieveData(org, options, cb) {
+  options.getCachedData = readCachedFile;
+  org.stats.get(options, function(error, response) {
     handleError(error);
-    if (response.statusCode != 200) {
-      console.log('the query failed: ' + response.statusCode);
-      process.exit(1);
+    if (response.data) {
+      if (response.cachefile){
+        if (!fs.existsSync(defaults.dirs.cache)){
+          fs.mkdirSync(defaults.dirs.cache);
+        }
+        fs.writeFileSync(response.cachefile, JSON.stringify(response.data));
+      }
+      if (opt.options.verbose) {
+        console.log(response.data); // JSON parsed
+      }
+      return cb(null, response.data);
     }
-    var result = JSON.parse(body);
-    cb(null, result.environments);
   });
 }
 
-function retrieveData(options, cb) {
-  // time curl -n "$mgmtserver/v1/o/$ORG/e/$ENV/stats/apis?select=sum(message_count)&timeRange=01/01/2018%2000:00~08/01/2018%2000:00&timeUnit=month"
-  var query = sprintf('?select=sum(message_count)&timeUnit=%s&timeRange=%s',
-                      options.timeUnit,
-                      getTimeRange(options.startTime, options.endTime));
-
-  var requestOptions = merge(getRequestOptions(), {
-        url : urljoin(opt.options.mgmtServer, 'v1/o', options.organization, 'e', options.environment, 'stats/apis') + query
-      });
-
-  console.log('GET "%s"', requestOptions.url);
-  var today = dateFormat(new Date(), "yyyymmdd");
-  var sha = shajs('sha256')
-    .update(JSON.stringify(requestOptions))
-    .update(today)
-    .digest('hex');
-
-  var cacheFileName = path.join(defaults.dirs.cache, sha + '--' + today + '.json');
-  if ( ! options.nocache && fs.existsSync(cacheFileName)) {
-    console.log('using cached data.');
-    var text = fs.readFileSync(cacheFileName,'utf8');
-    cb(null, text);
-  }
-  else {
-    request(requestOptions, function(error, response, body){
-      handleError(error);
-      if (response.statusCode != 200) {
-        console.log('the query failed: ' + response.statusCode);
-        process.exit(1);
-      }
-      if (opt.options.verbose) {
-        console.log(body);
-      }
-      if (!fs.existsSync(defaults.dirs.cache)){
-        fs.mkdirSync(defaults.dirs.cache);
-      }
-      fs.writeFileSync(cacheFileName, body);
-      cb(null, body);
-    });
-  }
-}
 
 function insertDataByMonth(dataTable, apiname, date, volume) {
   if ( ! dataTable[apiname]) {
@@ -226,11 +156,10 @@ function handleOneHour(dataTable, dimension) {
   };
 }
 
-function processJsonAnalyticsData(payload) {
+function processJsonAnalyticsData(results) {
   var dataTable = {};
-  var r = JSON.parse(payload);
-  if (r.environments[0].dimensions) {
-    r.environments[0].dimensions.forEach(function(dimension){
+  if (results.environments[0].dimensions) {
+    results.environments[0].dimensions.forEach(function(dimension){
       // dimension.name => api name
       var messageCounts = dimension.metrics[0];
       //console.log('found %d values', messageCounts.values.length);
@@ -242,10 +171,10 @@ function processJsonAnalyticsData(payload) {
   return dataTable;
 }
 
-function getDataForOneEnvironment(options){
+function getDataForOneEnvironment(org, options){
   return function(environment, callback) {
     options.environment = environment;
-    retrieveData(options, function(e, results){
+    retrieveData(org, options, function(e, results){
       handleError(e);
       callback(null, { environment: environment, data : processJsonAnalyticsData(results) });
     });
@@ -958,7 +887,7 @@ console.log(
 var opt = getopt.parse(process.argv.slice(2));
 
 if ( ! opt.options.org) {
-  console.log('You must specify an organization');
+  common.logWrite('You must specify an organization');
   getopt.showHelp();
   process.exit(1);
 }
@@ -966,7 +895,7 @@ if ( ! opt.options.org) {
 if (! opt.options.mgmtServer) {
   opt.options.mgmtServer = defaults.mgmtServer;
   if (opt.options.verbose) {
-    console.log('using Edge Admin API endpoint: ' + opt.options.mgmtServer);
+    common.logWrite('using Edge Admin API endpoint: ' + opt.options.mgmtServer);
   }
 }
 
@@ -1003,20 +932,38 @@ else {
 }
 
 if (opt.options.verbose) {
-  console.log('using period ending: ' + dateFormat(startTime, 'mm/dd/yyyy'));
+  common.logWrite('using period ending: ' + dateFormat(startTime, 'mm/dd/yyyy'));
 }
 
+common.verifyCommonRequiredParameters(opt.options, getopt);
+
 var options = {
-      organization : opt.options.org,
-      nocache : opt.options.nocache,
-      startTime: startTime,
-      endTime : endTime,
-      timeUnit : timeUnit
+      mgmtServer: opt.options.mgmtserver,
+      org : opt.options.org,
+      user: opt.options.username,
+      password: opt.options.password,
+      no_token: opt.options.notoken,
+      verbosity: opt.options.verbose || 0
     };
 
-getEnvironments(function(e, environments){
+
+apigeeEdge.connect(options, function(e, org) {
   handleError(e);
-  async.mapSeries(environments,
-                  getDataForOneEnvironment(options),
-                  doneAllEnvironments);
+
+  org.environments.get(function(e, environments) {
+    handleError(e);
+    var statsOptions = {
+          nocache : opt.options.nocache,
+          dimension: 'apis',
+          metric: 'sum(message_count)',
+          startTime: startTime,
+          endTime : endTime,
+          timeUnit : timeUnit
+        };
+
+    async.mapSeries(environments,
+                    getDataForOneEnvironment(org, statsOptions),
+                    doneAllEnvironments);
+  });
+
 });

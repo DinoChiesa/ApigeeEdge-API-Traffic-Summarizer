@@ -1,14 +1,15 @@
 {
-  "name": "analytics",
-  "version": "1.0.0",
+  "name": "trafficByApiSummarizer",
+  "version": "1.0.1",
   "description": "",
-  "main": "trafficByApi.js",
+  "main": "trafficByApiSummarizer.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Dino Chiesa <dchiesa@google.com>",
   "license": "Apache-2.0",
   "dependencies": {
+    "apigee-edge-js": "^0.3.15",
     "async": "^2.6.1",
     "dateformat": "^3.0.3",
     "googleapis": "^27.0.0",
