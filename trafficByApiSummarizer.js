@@ -2,7 +2,7 @@
 // ------------------------------------------------------------------
 //
 // created: Tue Aug  7 14:42:00 2018
-// last saved: <2018-October-15 18:06:54>
+// last saved: <2019-January-24 15:27:21>
 //
 
 /* jshint esversion: 6, node: true */
@@ -26,8 +26,9 @@ const edgejs     = require('apigee-edge-js'),
       merge        = require('merge'),
       async        = require('async'),
       netrc        = require('netrc')(),
-      dateFormat   = require('dateformat'),
-      version      = '20181015-1717',
+      moment       = require('moment'),
+      Interval     = require('./interval.js'),
+      version      = '20190123-1452',
       GOOG_APIS_SCOPES = ['https://www.googleapis.com/auth/spreadsheets'],
       defaults     = {
         dirs : {
@@ -37,9 +38,10 @@ const edgejs     = require('apigee-edge-js'),
         mgmtServer: 'https://api.enterprise.apigee.com'
       },
     getopt = new Getopt(common.commonOptions.concat([
-      ['P' , 'prior', 'optional. use the prior year or month. Default: the current year/month.'],
-      ['m' , 'bymonth', 'optional. collect data for the month. Default: collect data for the year.'],
+      ['P' , 'prior', 'optional. use the prior (N-1) year or month. Default: the current year/month.'],
+      ['d' , 'daily', 'optional. collect daily data for the period. Default: collect monthly data.'],
       ['S' , 'sheet', 'optional. create a Google Sheet with the data. Default: emit .csv file.'],
+      [''  , 'start=ARG', 'optional. starting date in YYYYMMDD or YYYYMM format. Supercedes -P.'],
       ['N' , 'nocache', 'optional. do not use cached data; retrieve from stats API']
     ])).bindHelp();
 
@@ -50,52 +52,47 @@ function handleError(e) {
   }
 }
 
-function memoize( fn ) {
-  return function () {
-    var args = Array.prototype.slice.call(arguments),
-        hash = "",
-        i = args.length,
-        currentArg = null;
-    while (i--) {
-      currentArg = args[i];
-      hash += (currentArg === Object(currentArg)) ?
-        JSON.stringify(currentArg) : currentArg;
-    }
-    if ( ! fn.memoize) { fn.memoize = {}; }
-    return (hash in fn.memoize) ? fn.memoize[hash] :
-      fn.memoize[hash] = fn.apply(this, args);
-  };
-}
+// function memoize( fn ) {
+//   return function () {
+//     var args = Array.prototype.slice.call(arguments),
+//         hash = "",
+//         i = args.length,
+//         currentArg = null;
+//     while (i--) {
+//       currentArg = args[i];
+//       hash += (currentArg === Object(currentArg)) ?
+//         JSON.stringify(currentArg) : currentArg;
+//     }
+//     if ( ! fn.memoize) { fn.memoize = {}; }
+//     return (hash in fn.memoize) ? fn.memoize[hash] :
+//       fn.memoize[hash] = fn.apply(this, args);
+//   };
+// }
 
-function addOneDay(date){
-  date.setDate(date.getDate() + 1);
-  return date;
-}
+// function base64Encode(s) {
+//   return new Buffer.from(s).toString('base64');
+// }
 
-function base64Encode(s) {
-  return new Buffer.from(s).toString('base64');
-}
-
-
-function readCachedFile(url, sha) {
+function readCachedFile(url, uniquifier) {
   if (options.nocache) { return false; }
-  let today = dateFormat(new Date(), "yyyymmdd");
-  let cacheFileName = path.join(defaults.dirs.cache, sha + '--' + today + '.json');
+  let today = moment(new Date()).format('YYYYMMDD');
+  let cacheFileName = path.join(defaults.dirs.cache, uniquifier + '--' + today + '.json');
+  console.log('checking for cache file %s....', cacheFileName);
   if (fs.existsSync(cacheFileName)) {
     console.log('cached data exists.');
     var text = fs.readFileSync(cacheFileName,'utf8');
     return { data: text };
   }
+  console.log('no cached data available.');
   return { cachefile: cacheFileName };
 }
 
-
 function retrieveData(org, options, cb) {
-  options.getCachedData = readCachedFile;
+  options.cacheCheck = readCachedFile;
   org.stats.get(options, function(error, response) {
     handleError(error);
     if (response.data) {
-      if (response.cachefile){
+      if (response.cachefile) {
         if (!fs.existsSync(defaults.dirs.cache)){
           fs.mkdirSync(defaults.dirs.cache);
         }
@@ -109,50 +106,21 @@ function retrieveData(org, options, cb) {
   });
 }
 
-
-function insertDataByMonth(dataTable, apiname, date, volume) {
-  if ( ! dataTable[apiname]) {
-    dataTable[apiname] = Array(12).fill(0);
-  }
-  var month = parseInt(dateFormat(date,'m'));
-  dataTable[apiname][month - 1] = volume;
-}
-
-function daysInMonth(date) {
-  var lastDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 0);
-  var result = lastDayOfMonth.getDate();
-  //console.log('days-in-month for %s: %d', dateFormat(date, 'yyyy/mm/dd'), result);
-  return result;
-}
-
-function insertDataByDay(dataTable, apiname, date, volume) {
-  if ( ! dataTable[apiname]) {
-    // an array of zeroes, one for each day in the month
-    dataTable[apiname] = Array(daysInMonth(endTime)).fill(0);
-  }
-  var day = parseInt(dateFormat(date,'d'));
-  dataTable[apiname][day - 1] = volume;
-}
-
-function handleOneMonth(dataTable, dimension) {
+function handleOneTimeUnit(dataTable, dimension) {
   return function(record) {
-    var date = addOneDay(new Date(record.timestamp));
+    var thisMoment = moment(record.timestamp).add(1, interval.timeUnit).endOf(interval.timeUnit);
     var volume = parseFloat(record.value);
     if (opt.options.verbose) {
-      console.log(sprintf('%-28s %26s %f', dimension.name, dateFormat(date, "isoDateTime"), volume ));
+      console.log(sprintf('%-48s %-14s %f',
+                          dimension.name,
+                          thisMoment.format('YYYY-MM-DD'),
+                          volume ));
     }
-    insertDataByMonth(dataTable, dimension.name, date, volume);
-  };
-}
-
-function handleOneHour(dataTable, dimension) {
-  return function(record) {
-    var moment = addOneDay(new Date(record.timestamp));
-    var volume = parseFloat(record.value);
-    if (opt.options.verbose) {
-      console.log(sprintf('%-28s %26s %f', dimension.name, dateFormat(moment, "isoDateTime"), volume ));
+    if ( ! dataTable[dimension.name]) {
+      dataTable[dimension.name] = interval.getRowOfZeros();
     }
-    insertDataByDay(dataTable, dimension.name, moment, volume);
+    var col = interval.getColumnNumber(thisMoment);
+    dataTable[dimension.name][col] = volume;
   };
 }
 
@@ -163,9 +131,7 @@ function processJsonAnalyticsData(results) {
       // dimension.name => api name
       var messageCounts = dimension.metrics[0];
       //console.log('found %d values', messageCounts.values.length);
-      var fn = (chartPeriod.length == 4) ? handleOneMonth(dataTable, dimension) :
-        handleOneHour(dataTable, dimension);
-      messageCounts.values.forEach(fn);
+      messageCounts.values.forEach(handleOneTimeUnit(dataTable, dimension));
     });
   }
   return dataTable;
@@ -241,7 +207,7 @@ function summarizeEnvironments(rawlines) {
   rawlines.forEach((x1, i1) => {
     const org = x1[0];
     const env = x1[1];
-    var line = lines.find( x => { return (x[0] ==org) && (x[1] == env); });
+    var line = lines.find( x => { return (x[0] == org) && (x[1] == env); });
 
     if (line) {
       if (i1>0) {
@@ -285,7 +251,7 @@ function createSheet(label, lines) {
   return function(auth) {
     console.log('\nCreating a new spreadsheet on Google sheets...');
     const sheets = google.sheets({version: 'v4', auth});
-    const today = dateFormat(new Date(), 'yyyy-mmm-dd');
+    const today = moment(new Date()).format('YYYY-MMM-DD');
     const sheetTitles = [
             label,
             label.replace('api', 'environment')
@@ -293,7 +259,7 @@ function createSheet(label, lines) {
     var request = {
           resource: {
             properties : {
-              title: "API Traffic Summary: " + opt.options.org + ' as of ' + today
+              title: "API Traffic: " + opt.options.org + ' for ' + interval.getPeriod() + ' as of ' + today
             },
             sheets : [
               {
@@ -307,9 +273,24 @@ function createSheet(label, lines) {
         };
 
     sheets.spreadsheets.create(request, function(e, createResponse) {
+      // this function import raw data, adds sum formuli and pct, and produces charts.
       handleError(e);
-      // import data, and add sum formuli, produce chart
+
+      // from the raw data, aggregate the totals for the environments
       const lines2 = summarizeEnvironments(lines);
+
+      // console.log('FiRST DATA LINE');
+      //       console.log(JSON.stringify(lines[1]));
+      //
+      // console.log('SUMS');
+      //
+      // var obj = {
+      //       range: sprintf("%s!R[%d]C[%d]:R[%d]C[%d]", sheetTitles[0], 1, lines[1].length , lines.length, lines[1].length ),
+      //       // slice(1) skips the first row, which holds column headers, no values
+      //       values: lines.slice(1).map((x, i) => [ sprintf('=SUM(indirect("R%dC4:R%dC%d",false))', i + 2, i + 2, x.length) ])
+      //       // =SUM(indirect("R2C4:R2C22",false))
+      //     };
+      // console.log(JSON.stringify(obj, null, 2));
 
       // A single .batchUpdate() call failed with a HTTP 413 "Entity Too Large",
       // because the data is too large. To avoid that, this system makes N
@@ -321,13 +302,18 @@ function createSheet(label, lines) {
                 values: lines.map(x => x.concat(['']) )
               },
               {
-                // formulas that perform sums of that
+                // add a column that sums each row
+                range: sprintf("%s!R[%d]C[%d]:R[%d]C[%d]", sheetTitles[0], 1, lines[1].length , lines.length, lines[1].length ),
+                values: lines.slice(1).map((x, i) => [ sprintf('=SUM(indirect("R%dC4:R%dC%d",false))', i + 2, i + 2, x.length ) ])
+              },
+              {
+                // add a row that sums each column
                 range: sprintf("%s!R[%d]C[%d]:R[%d]C[%d]", sheetTitles[0], lines.length, 3, lines.length, lines[0].length),
                 values: [lines[0].slice(3).map((v, i) => sprintf('=SUM(indirect("R2C%d:R%dC%d",false))', i + 4, lines.length, i + 4 ) )]
               },
               {
-                // formulas that compute total percentages for sheet0
-                range: sprintf("%s!R[%d]C[%d]:R[%d]C[%d]", sheetTitles[0], 1, lines[0].length , lines.length + 1, lines[0].length ),
+                // add a column that computes percentages for sheet0
+                range: sprintf("%s!R[%d]C[%d]:R[%d]C[%d]", sheetTitles[0], 1, lines[0].length + 1, lines.length + 2, lines[0].length ),
                 values: lines.map( (x, i) => [ sprintf('=indirect("R%dC%d",false)/indirect("R%dC%d",false)', i + 2, lines[0].length, lines.length + 1, lines[0].length) ] )
               },
               {
@@ -336,12 +322,17 @@ function createSheet(label, lines) {
                 values: lines2.map(x => x.concat(['']) )
               },
               {
-                // formulas that compute sums of that
+                // add a column that sums each row
+                range: sprintf("%s!R[%d]C[%d]:R[%d]C[%d]", sheetTitles[1], 1, lines2[1].length , lines2.length, lines2[1].length ),
+                values: lines2.slice(1).map((x, i) => [ sprintf('=SUM(indirect("R%dC3:R%dC%d",false))', i + 2, i + 2, x.length ) ])
+              },
+              {
+                // add a row that sums each column
                 range: sprintf("%s!R[%d]C[%d]:R[%d]C[%d]", sheetTitles[1], lines2.length, 2, lines2.length, lines2[0].length),
                 values: [lines2[0].slice(2).map((v, i) => sprintf('=SUM(indirect("R2C%d:R%dC%d",false))', i + 3, lines2.length, i + 3 ) )]
               },
               {
-                // formulas that compute percentages for sheet1
+                // add a column that computes percentages for sheet1
                 range: sprintf("%s!R[%d]C[%d]:R[%d]C[%d]", sheetTitles[1], 1, lines2[0].length , lines2.length + 1, lines2[0].length ),
                 values: lines2.map( (x, i) => [ sprintf('=indirect("R%dC%d",false)/indirect("R%dC%d",false)', i + 2, lines2[0].length, lines2.length + 1, lines2[0].length) ] )
               }
@@ -818,7 +809,7 @@ function emitCsvFile(label, lines) {
   if (!fs.existsSync(defaults.dirs.output)){
     fs.mkdirSync(defaults.dirs.output);
   }
-  const thisMinute = dateFormat(new Date(), 'yyyymmddHHMM');
+  const thisMinute = moment(new Date()).format('YYYYMMDDHHmm');
   const outputFile = path.join(defaults.dirs.output, label + '--' + thisMinute + ".csv");
   console.log('writing CSV output to   %s', outputFile);
   const stream = fs.createWriteStream(outputFile, {flags:'w'});
@@ -836,34 +827,25 @@ function doneAllEnvironments(e, results) {
     console.log(JSON.stringify(results));
   }
 
-  var lines = [];
-  var headerLine = ["org", "env", "apiname"];
+  // rows is an array of arrays. Each item is an array of values for columns
+  // in that line. Start with the header line.
+  //
+  var cells = [ ["org", "env", "apiname"].concat(interval.getPeriodColumnHeads()).concat(["Total"]) ];
 
-  if (chartPeriod.length == 4) {
-    headerLine = headerLine.concat("Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec".split(',').map( m => m + '-' + chartPeriod ));
-  }
-  else {
-    // dynamic number of columns => number of days in the month
-    headerLine = headerLine.concat(Array(daysInMonth(endTime)).fill(0).map( (x, i) => (i + 1)));
-  }
-
-  headerLine = headerLine.concat(["Total"]);
-  lines.push(headerLine);
-
-  const add = (a, b) => a + b;
+  //const add = (a, b) => a + b;
   results.forEach(function(dataTable) {
    Object.keys(dataTable.data).sort().forEach(function(key) {
      const row = dataTable.data[key];
      //console.log('row: ' + JSON.stringify(row));
-     const sum = row.reduce(add);
-     var line = [opt.options.org, dataTable.environment, key]
-       .concat(row)
-       .concat([sum]);
-     lines.push(line);
+     //const sum = row.reduce(add); // alternatively, we could ask the sheet to do this...
+     let line = [opt.options.org, dataTable.environment, key]
+       .concat(row);
+       //.concat([sum]);
+     cells.push(line);
    });
   });
 
-  const label = sprintf('by-api--%s-%s', opt.options.org, chartPeriod);
+  const label = sprintf('by-api--%s-%s', opt.options.org, interval.getPeriod());
   if (opt.options.sheet) {
     const clientCredentialsFile = path.join(".", "gsheets_client_credentials.json");
     fs.readFile(clientCredentialsFile, (e, content) => {
@@ -871,11 +853,11 @@ function doneAllEnvironments(e, results) {
         console.log('Error loading client credentials file:', e);
         return;
       }
-      oauth2Authorize(JSON.parse(content), createSheet(label, lines));
+      oauth2Authorize(JSON.parse(content), createSheet(label, cells));
     });
   }
   else {
-    emitCsvFile('traffic-' + label, lines);
+    emitCsvFile('traffic-' + label, cells);
   }
 }
 
@@ -900,39 +882,32 @@ if (! opt.options.mgmtServer) {
 }
 
 var now = new Date();
-var endTime, startTime, timeUnit, chartPeriod;
+var interval;
 
-if (opt.options.prior) {
-  if (opt.options.bymonth) {
-    timeUnit = 'day';
-    startTime = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    endTime = new Date(now.getFullYear(), now.getMonth(), 0);
-    chartPeriod = dateFormat(endTime, 'yyyymm');
-  }
-  else {
-    timeUnit = 'month';
-    startTime = new Date(now.getFullYear() - 1, 0, 1);
-    endTime = new Date(now.getFullYear() - 1, 11, 31);
-    chartPeriod = dateFormat(endTime, 'yyyy');
-  }
+if (opt.options.start) {
+  // from a specified day (or month) until now
+  interval = new Interval(opt.options.start,
+                          new Date(now.getFullYear(), now.getMonth() + 1, 0),  // eom
+                          opt.options.daily);
 }
 else {
-  if (opt.options.bymonth) {
-    timeUnit = 'day';
-    startTime = new Date(now.getFullYear(), now.getMonth(), 1);
-    endTime = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    chartPeriod = dateFormat(endTime, 'yyyymm');
+  let n = (opt.options.prior) ? 1: 0;
+  if (opt.options.daily) {
+    // current or prior month
+    interval = new Interval(new Date(now.getFullYear(), now.getMonth() - n, 1),
+                          new Date(now.getFullYear(), now.getMonth() + 1 - n, 0),
+                          true);
   }
   else {
-    timeUnit = 'month';
-    startTime = new Date(now.getFullYear(), 0, 1);
-    endTime = new Date(now.getFullYear(), 11, 31);
-    chartPeriod = dateFormat(endTime, 'yyyy');
+    // current or prior year
+    interval = new Interval(new Date(now.getFullYear() - n, 0, 1),
+                            new Date(now.getFullYear() - n, 11, 31),
+                            false);
   }
 }
 
 if (opt.options.verbose) {
-  common.logWrite('using period ending: ' + dateFormat(startTime, 'mm/dd/yyyy'));
+  common.logWrite('using chart period: ' + interval.getPeriod());
 }
 
 common.verifyCommonRequiredParameters(opt.options, getopt);
@@ -946,7 +921,6 @@ var options = {
       verbosity: opt.options.verbose || 0
     };
 
-
 apigeeEdge.connect(options, function(e, org) {
   handleError(e);
 
@@ -956,9 +930,9 @@ apigeeEdge.connect(options, function(e, org) {
           nocache : opt.options.nocache,
           dimension: 'apis',
           metric: 'sum(message_count)',
-          startTime: startTime,
-          endTime : endTime,
-          timeUnit : timeUnit
+          startTime: interval.start,
+          endTime : interval.end,
+          timeUnit: interval.timeUnit
         };
 
     async.mapSeries(environments,

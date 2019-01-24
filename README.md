@@ -42,7 +42,7 @@ Options:
 
 ## Example 1
 
-Generate a google sheet that summarizes the traffic volume data for the current year, for an organization.
+Generate a Google sheets document that summarizes the traffic volume data for the current year, for an organization.
 
 ```
  node ./trafficByApiSummarizer.js -n -o my-org-name -S
@@ -64,10 +64,20 @@ environment.  Then 2 charts corresponding to the data in those sheets.
 ![Chart1](images/screenshot-20180907-083533.png "per-API Proxy traffic chart")
 
 
-When used with the -S option, no .csv file is emitted.
+This can take a long time to run, if there's lots of data. You may want to use the -v option to see
+verbose output.
 
 
 ## Example 2
+
+Generate a Google sheets document that summarizes the traffic volume data since July 2017, for an organization.
+
+```
+ node ./trafficByApiSummarizer.js -n -v -o my-org-name  -S --start 201707
+```
+
+
+## Example 3
 
 Generate a .csv file that summarizes the traffic volume data for the current year, for an Edge organization.
 
@@ -75,19 +85,23 @@ Generate a .csv file that summarizes the traffic volume data for the current yea
  node ./trafficByApiSummarizer.js -n -o my-org-name
 ```
 
-When used without the -S option, a .csv file is emitted, and no Google sheet is created. The .csv file includes the raw "per API proxy" data.  It does not include a rollup of "per environment".
+
+When you invoke the program without the -S option, a .csv file is emitted, and
+no Google sheets document is created. The .csv file includes the raw "per API
+proxy" data. It does not include a rollup of "per environment".  Again, this
+can take a long time to run.
 
 
-## Example 3
+## Example 4
 
-Generate a .csv file that summarizes the traffic volume data for the prior year (-P), currently 2017, for an Edge organization.
+Generate a .csv file that summarizes the traffic volume data for the prior year (-P) for an Edge organization.
 
 
 ```
  node ./trafficByApiSummarizer.js -n -o my-org-name -P
 ```
 
-## Example 4
+## Example 5
 
 Generate a google sheet that summarizes the traffic volume data for the prior month, for an organization.
 
