@@ -94,7 +94,7 @@ can take a long time to run.
 
 ## Example 4
 
-Generate a .csv file that summarizes the traffic volume data for the prior year (-P) for an Edge organization.
+Generate a .csv file that summarizes the traffic volume data, by month, for the prior year (-P) for an Edge organization.
 
 
 ```
@@ -103,10 +103,10 @@ Generate a .csv file that summarizes the traffic volume data for the prior year 
 
 ## Example 5
 
-Generate a google sheet that summarizes the traffic volume data for the prior month, for an organization.
+Generate a google sheet that summarizes the traffic volume data, by day, for the prior month, for an organization.
 
 ```
- node ./trafficByApiSummarizer.js -n -o my-org-name -m -P -S
+ node ./trafficByApiSummarizer.js -n -o my-org-name -d -P -S
 ```
 
 
