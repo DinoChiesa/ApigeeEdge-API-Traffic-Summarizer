@@ -2,7 +2,7 @@
 // ------------------------------------------------------------------
 //
 // created: Tue Aug  7 14:42:00 2018
-// last saved: <2019-January-24 15:27:21>
+// last saved: <2019-February-01 15:49:17>
 //
 
 /* jshint esversion: 6, node: true */
@@ -77,13 +77,19 @@ function readCachedFile(url, uniquifier) {
   if (options.nocache) { return false; }
   let today = moment(new Date()).format('YYYYMMDD');
   let cacheFileName = path.join(defaults.dirs.cache, uniquifier + '--' + today + '.json');
-  console.log('checking for cache file %s....', cacheFileName);
+  if (opt.options.verbose) {
+    console.log('checking for cache file %s....', cacheFileName);
+  }
   if (fs.existsSync(cacheFileName)) {
-    console.log('cached data exists.');
+    if (opt.options.verbose) {
+      console.log('cached data exists.');
+    }
     var text = fs.readFileSync(cacheFileName,'utf8');
     return { data: text };
   }
-  console.log('no cached data available.');
+  if (opt.options.verbose) {
+    console.log('no cached data available.');
+  }
   return { cachefile: cacheFileName };
 }
 
