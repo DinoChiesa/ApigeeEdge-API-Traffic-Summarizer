@@ -2,7 +2,7 @@
 // ------------------------------------------------------------------
 //
 // created: Tue Aug  7 14:42:00 2018
-// last saved: <2019-February-01 15:49:17>
+// last saved: <2019-March-06 17:58:53>
 //
 
 /* jshint esversion: 6, node: true */
@@ -836,7 +836,7 @@ function doneAllEnvironments(e, results) {
   // rows is an array of arrays. Each item is an array of values for columns
   // in that line. Start with the header line.
   //
-  var cells = [ ["org", "env", "apiname"].concat(interval.getPeriodColumnHeads()).concat(["Total"]) ];
+  var cells = [ ["org", "env", "proxyname"].concat(interval.getPeriodColumnHeads()).concat(["Total"]) ];
 
   //const add = (a, b) => a + b;
   results.forEach(function(dataTable) {
