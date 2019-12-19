@@ -31,6 +31,7 @@ Options:
   -o, --org=ARG        required. name of the Edge organization
   -M, --mgmtserver=ARG the Edge mgmt server endpoint. Defaults to https://api.enterprise.apigee.com .
   -u, --username=ARG   optional. username for authenticating to Edge
+  -Z, --ssoZone=ARG    optional. SSO Zone name for authenticating to SAML-enabled Edge
   -n, --netrc          optional. specify in lieu of username to rely on .netrc for credentials.
   -P, --prior          optional. use the prior year or month. Default: the current year/month.
   -m, --bymonth        optional. collect data for the month. Default: collect data for the current year.
