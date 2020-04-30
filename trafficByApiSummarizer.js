@@ -924,6 +924,7 @@ var options = {
       user: opt.options.username,
       password: opt.options.password,
       no_token: opt.options.notoken,
+      ssoZone: opt.options.ssoZone,
       verbosity: opt.options.verbose || 0
     };
 
