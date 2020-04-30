@@ -2,7 +2,7 @@
 // ------------------------------------------------------------------
 //
 // created: Tue Aug  7 14:42:00 2018
-// last saved: <2019-March-06 17:58:53>
+// last saved: <2020-January-14 07:31:57>
 //
 
 /* jshint esversion: 6, node: true */
@@ -22,7 +22,7 @@ const edgejs     = require('apigee-edge-js'),
       path         = require('path'),
       Getopt       = require('node-getopt'),
       readline     = require('readline'),
-      readlineSync = require('readline-sync'),
+      //readlineSync = require('readline-sync'),
       merge        = require('merge'),
       async        = require('async'),
       netrc        = require('netrc')(),
@@ -78,17 +78,17 @@ function readCachedFile(url, uniquifier) {
   let today = moment(new Date()).format('YYYYMMDD');
   let cacheFileName = path.join(defaults.dirs.cache, uniquifier + '--' + today + '.json');
   if (opt.options.verbose) {
-    console.log('checking for cache file %s....', cacheFileName);
+    common.logWrite('checking for cache file %s....', cacheFileName);
   }
   if (fs.existsSync(cacheFileName)) {
     if (opt.options.verbose) {
-      console.log('cached data exists.');
+      common.logWrite('cached data exists.');
     }
     var text = fs.readFileSync(cacheFileName,'utf8');
     return { data: text };
   }
   if (opt.options.verbose) {
-    console.log('no cached data available.');
+    common.logWrite('no cached data available.');
   }
   return { cachefile: cacheFileName };
 }
@@ -162,7 +162,8 @@ function getNewGsuiteToken(oAuth2Client, tokenStashPath, callback) {
   console.log('This script will now open a browser tab. After granting consent, you will');
   console.log('receive a one-time code. Return here and paste it in, to continue....\n');
 
-  sleep(4200).then(() => {
+  sleep(4200)
+    .then(() => {
     const authUrl = oAuth2Client.generateAuthUrl({
             access_type: 'offline',
             scope: GOOG_APIS_SCOPES
@@ -833,7 +834,7 @@ function doneAllEnvironments(e, results) {
     console.log(JSON.stringify(results));
   }
 
-  // rows is an array of arrays. Each item is an array of values for columns
+  // cells is an array of arrays. Each item is an array of values for columns
   // in that line. Start with the header line.
   //
   var cells = [ ["org", "env", "proxyname"].concat(interval.getPeriodColumnHeads()).concat(["Total"]) ];

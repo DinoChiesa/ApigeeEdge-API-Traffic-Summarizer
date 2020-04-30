@@ -46,18 +46,27 @@ Options:
 Generate a Google sheets document that summarizes the traffic volume data for the current year, for an organization.
 
 ```
- node ./trafficByApiSummarizer.js -n -o my-org-name -S
+ node ./trafficByApiSummarizer.js -v -u username@example.com -o my-org-name -S
 ```
 
-The user will be prompted to authenticate to Google, in order to grant
-consent to the "API Traffic Summarizer" app to generate a spreadsheet.
+```
+ node ./trafficByApiSummarizer.js -v -n -o my-org-name -S
+```
 
-Though the scope allows the tool to create and view sheets, the tool merely
-creates a new sheet. It does not read any existing sheets stored in Google drive.
+In the first case, the script will prompt the user for a password to Apigee in order to
+query the Admin API.  In the second case the script will use the credentials in
+the .netrc file for api.enterprise.apigee.com.
 
-The tool will create a spreadsheet with 2 sheets and 2 charts; one sheet will
+In both cases, the user will be prompted to authenticate to Google, in order to
+grant consent to the "API Traffic Summarizer" app to generate a
+spreadsheet. Though the scope allows the tool to create and view sheets, the
+tool merely creates a new sheet. It does not read any existing sheets stored in
+Google drive.
+
+The tool will perform several queries to the /stats API for Apigee, then with
+the resulting data, will create a spreadsheet with 2 sheets and 2 charts; one sheet will
 list the "per API Proxy" traffic volumes, and one will summarize the traffic by
-environment.  Then 2 charts corresponding to the data in those sheets.
+environment. Then 2 charts corresponding to the data in those sheets.
 
 
 ![Sheet1](images/screenshot-20180907-083518.png "per-API Proxy traffic sheet")
