@@ -13,7 +13,7 @@ This example is not an official Google product, nor is it part of an official Go
 
 ## LICENSE
 
-This material is copyright 2018 Google LLC.
+This material is copyright 2018-2020 Google LLC.
 and is licensed under the Apache 2.0 license. See the [LICENSE](LICENSE) file.
 
 ## Usage
@@ -43,21 +43,24 @@ Options:
 
 ## Example 1
 
-Generate a Google sheets document that summarizes the traffic volume data for the current year, for an organization.
+Generate a Google sheets document that summarizes the traffic volume data for
+the current year, for an organization.
 
-```
- node ./trafficByApiSummarizer.js -v -u username@example.com -o my-org-name -S
-```
+* option 1: prompt for password
+  ```
+  node ./trafficByApiSummarizer.js -v -u username@example.com -o my-org-name -S
+  ```
+* option 2: using .netrc
+  ```
+  node ./trafficByApiSummarizer.js -v -n -o my-org-name -S
+  ```
 
-```
- node ./trafficByApiSummarizer.js -v -n -o my-org-name -S
-```
+In the first case, the script will prompt the user for an administrative
+password to Apigee in order to query the Admin API.  In the second case the
+script will use the credentials in the .netrc file for
+api.enterprise.apigee.com.
 
-In the first case, the script will prompt the user for a password to Apigee in order to
-query the Admin API.  In the second case the script will use the credentials in
-the .netrc file for api.enterprise.apigee.com.
-
-In both cases, the user will be prompted to authenticate to Google, in order to
+In both cases, the user will separately be prompted to authenticate to Google, in order to
 grant consent to the "API Traffic Summarizer" app to generate a
 spreadsheet. Though the scope allows the tool to create and view sheets, the
 tool merely creates a new sheet. It does not read any existing sheets stored in
@@ -80,16 +83,18 @@ verbose output.
 
 ## Example 2
 
-Generate a Google sheets document that summarizes the traffic volume data since July 2017, for an organization.
+Generate a Google sheets document that summarizes the traffic volume data since
+July 2017, for an organization.
 
 ```
- node ./trafficByApiSummarizer.js -n -v -o my-org-name  -S --start 201707
+node ./trafficByApiSummarizer.js -n -v -o my-org-name  -S --start 201707
 ```
 
 
 ## Example 3
 
-Generate a .csv file that summarizes the traffic volume data for the current year, for an Edge organization.
+Generate a .csv file that summarizes the traffic volume data for the current
+year, for an Edge organization.
 
 ```
  node ./trafficByApiSummarizer.js -n -o my-org-name
