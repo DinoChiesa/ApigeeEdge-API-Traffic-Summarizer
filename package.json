@@ -11,7 +11,7 @@
   "dependencies": {
     "apigee-edge-js": "^0.4.15",
     "async": "^2.6.1",
-    "googleapis": "^27.0.0",
+    "googleapis": "^39.1.0",
     "merge": "^1.2.1",
     "moment": "^2.24.0",
     "netrc": "^0.1.4",
