@@ -2,19 +2,15 @@
 // ------------------------------------------------------------------
 //
 // created: Tue Aug  7 14:42:00 2018
-// last saved: <2020-January-14 07:31:57>
+// last saved: <2020-November-16 16:19:43>
 //
 
-/* jshint esversion: 6, node: true */
+/* jshint esversion: 9, node: true, strict: implied */
 /* global process, console, Buffer */
-
-'use strict';
 
 const edgejs     = require('apigee-edge-js'),
       common     = edgejs.utility,
       apigeeEdge = edgejs.edge,
-      request      = require('request'),
-      urljoin      = require('url-join'),
       sprintf      = require('sprintf-js').sprintf,
       opn          = require('opn'),
       {google}     = require('googleapis'),
@@ -22,13 +18,11 @@ const edgejs     = require('apigee-edge-js'),
       path         = require('path'),
       Getopt       = require('node-getopt'),
       readline     = require('readline'),
-      //readlineSync = require('readline-sync'),
-      merge        = require('merge'),
       async        = require('async'),
       netrc        = require('netrc')(),
       moment       = require('moment'),
       Interval     = require('./interval.js'),
-      version      = '20190123-1452',
+      version      = '20201116-1619',
       GOOG_APIS_SCOPES = ['https://www.googleapis.com/auth/spreadsheets'],
       defaults     = {
         dirs : {
@@ -82,7 +76,7 @@ function readCachedFile(url, uniquifier) {
   }
   if (fs.existsSync(cacheFileName)) {
     if (opt.options.verbose) {
-      common.logWrite('cached data exists.');
+      common.logWrite('using cached data...');
     }
     var text = fs.readFileSync(cacheFileName,'utf8');
     return { data: text };
@@ -104,9 +98,9 @@ function retrieveData(org, options, cb) {
         }
         fs.writeFileSync(response.cachefile, JSON.stringify(response.data));
       }
-      if (opt.options.verbose) {
-        console.log(response.data); // JSON parsed
-      }
+      // if (opt.options.verbose) {
+      //   console.log(response.data); // JSON parsed
+      // }
       return cb(null, response.data);
     }
   });
@@ -830,7 +824,7 @@ function doneAllEnvironments(e, results) {
   handleError(e);
 
   if (opt.options.verbose){
-    console.log('all done');
+    //console.log('all done');
     console.log(JSON.stringify(results));
   }
 
@@ -943,7 +937,7 @@ apigeeEdge.connect(options, function(e, org) {
           timeUnit: interval.timeUnit
         };
 
-    async.mapSeries(environments,
+    async.mapSeries(environments.filter( e => e != 'portal'),
                     getDataForOneEnvironment(org, statsOptions),
                     doneAllEnvironments);
   });
