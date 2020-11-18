@@ -19,26 +19,30 @@ and is licensed under the Apache 2.0 license. See the [LICENSE](LICENSE) file.
 ## Usage
 
 ```
-$  node ./trafficByApiSummarizer.js
-Apigee Edge Analytics Summarizer tool, version: 20180906-2128
-Node.js v10.5.0
+$ node ./trafficByApiSummarizer.js
+Apigee Edge Analytics Summarizer tool, version: 20201116-1619
+Node.js v12.14.1
 
-You must specify an organization
+[2020-Nov-17 21:22:18] You must specify an organization
 Usage:
   node trafficByApiSummarizer.js [OPTION]
 
 Options:
-  -o, --org=ARG        required. name of the Edge organization
-  -M, --mgmtserver=ARG the Edge mgmt server endpoint. Defaults to https://api.enterprise.apigee.com .
-  -u, --username=ARG   optional. username for authenticating to Edge
-  -Z, --ssoZone=ARG    optional. SSO Zone name for authenticating to SAML-enabled Edge
-  -n, --netrc          optional. specify in lieu of username to rely on .netrc for credentials.
-  -P, --prior          optional. use the prior year or month. Default: the current year/month.
-  -m, --bymonth        optional. collect data for the month. Default: collect data for the current year.
-  -v, --verbose        optional. verbose output.
+  -M, --mgmtserver=ARG the base path, including optional port, of the Edge mgmt server. Defaults to https://api.enterprise.apigee.com .
+  -u, --username=ARG   org user with permissions to read Edge configuration.
+  -p, --password=ARG   password for the org user.
+  -n, --netrc          retrieve the username + password from the .netrc file. In lieu of -u/-p
+  -o, --org=ARG        the Edge organization.
+  -Z, --ssoZone=ARG    specify the SSO zone to use when authenticating.
+  -C, --passcode=ARG   specify the passcode to use when authenticating.
+  -T, --notoken        do not try to obtain an oauth token.
+  -v, --verbose
+  -h, --help
+  -P, --prior          optional. use the prior (N-1) year or month. Default: the current year/month.
+  -d, --daily          optional. collect daily data for the period. Default: collect monthly data.
   -S, --sheet          optional. create a Google Sheet with the data. Default: emit .csv file.
+      --start=ARG      optional. starting date in YYYYMMDD or YYYYMM format. Supercedes -P.
   -N, --nocache        optional. do not use cached data; retrieve from stats API
-  -h, --help           display this help
 ```
 
 ## Example 1
@@ -128,4 +132,3 @@ Generate a google sheet that summarizes the traffic volume data, by day, for the
 ## Bugs
 
 none?
-
