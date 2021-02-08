@@ -1,6 +1,6 @@
-# Apigee Edge Traffic Summarizer
+# Apigee Traffic Summarizer
 
-This tool queries the Edge Analytics API to retrieve message_count (traffic volume) statistics for an organization, over a given year.
+This tool queries the Apigee Analytics API to retrieve message_count (traffic volume) statistics for an organization, over a given year.
 
 There are two options for output:
 
@@ -20,7 +20,7 @@ and is licensed under the Apache 2.0 license. See the [LICENSE](LICENSE) file.
 
 ```
 $ node ./trafficByApiSummarizer.js
-Apigee Edge Analytics Summarizer tool, version: 20201116-1619
+Apigee Analytics Summarizer tool, version: 20201116-1619
 Node.js v12.14.1
 
 [2020-Nov-17 21:22:18] You must specify an organization
@@ -28,11 +28,11 @@ Usage:
   node trafficByApiSummarizer.js [OPTION]
 
 Options:
-  -M, --mgmtserver=ARG the base path, including optional port, of the Edge mgmt server. Defaults to https://api.enterprise.apigee.com .
-  -u, --username=ARG   org user with permissions to read Edge configuration.
+  -M, --mgmtserver=ARG the base path, including optional port, of the Apigee mgmt server. Defaults to https://api.enterprise.apigee.com .
+  -u, --username=ARG   org user with permissions to read Apigee configuration.
   -p, --password=ARG   password for the org user.
   -n, --netrc          retrieve the username + password from the .netrc file. In lieu of -u/-p
-  -o, --org=ARG        the Edge organization.
+  -o, --org=ARG        the Apigee organization.
   -Z, --ssoZone=ARG    specify the SSO zone to use when authenticating.
   -C, --passcode=ARG   specify the passcode to use when authenticating.
   -T, --notoken        do not try to obtain an oauth token.
@@ -98,7 +98,7 @@ node ./trafficByApiSummarizer.js -n -v -o my-org-name  -S --start 201707
 ## Example 3
 
 Generate a .csv file that summarizes the traffic volume data for the current
-year, for an Edge organization.
+year, for an Apigee organization.
 
 ```
  node ./trafficByApiSummarizer.js -n -o my-org-name
@@ -113,7 +113,7 @@ can take a long time to run.
 
 ## Example 4
 
-Generate a .csv file that summarizes the traffic volume data, by month, for the prior year (-P) for an Edge organization.
+Generate a .csv file that summarizes the traffic volume data, by month, for the prior year (-P) for an Apigee organization.
 
 
 ```

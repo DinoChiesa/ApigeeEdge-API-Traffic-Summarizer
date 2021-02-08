@@ -2,15 +2,15 @@
 // ------------------------------------------------------------------
 //
 // created: Tue Aug  7 14:42:00 2018
-// last saved: <2020-November-16 16:19:43>
+// last saved: <2021-February-08 09:53:34>
 //
 
 /* jshint esversion: 9, node: true, strict: implied */
 /* global process, console, Buffer */
 
-const edgejs     = require('apigee-edge-js'),
-      common     = edgejs.utility,
-      apigeeEdge = edgejs.edge,
+const apigeejs     = require('apigee-edge-js'),
+      common       = apigeejs.utility,
+      apigee       = apigeejs.edge,
       sprintf      = require('sprintf-js').sprintf,
       opn          = require('opn'),
       {google}     = require('googleapis'),
@@ -22,7 +22,7 @@ const edgejs     = require('apigee-edge-js'),
       netrc        = require('netrc')(),
       moment       = require('moment'),
       Interval     = require('./interval.js'),
-      version      = '20201116-1619',
+      version      = '20210208-0953',
       GOOG_APIS_SCOPES = ['https://www.googleapis.com/auth/spreadsheets'],
       defaults     = {
         dirs : {
@@ -864,7 +864,7 @@ function doneAllEnvironments(e, results) {
 
 // ========================================================================================
 console.log(
-  'Apigee Edge Analytics Summarizer tool, version: ' + version + '\n' +
+  'Apigee Analytics Summarizer tool, version: ' + version + '\n' +
     'Node.js ' + process.version + '\n');
 
 var opt = getopt.parse(process.argv.slice(2));
@@ -878,7 +878,7 @@ if ( ! opt.options.org) {
 if (! opt.options.mgmtServer) {
   opt.options.mgmtServer = defaults.mgmtServer;
   if (opt.options.verbose) {
-    common.logWrite('using Edge Admin API endpoint: ' + opt.options.mgmtServer);
+    common.logWrite('using Apigee Admin API endpoint: ' + opt.options.mgmtServer);
   }
 }
 
@@ -923,7 +923,7 @@ var options = {
       verbosity: opt.options.verbose || 0
     };
 
-apigeeEdge.connect(options, function(e, org) {
+apigee.connect(options, function(e, org) {
   handleError(e);
 
   org.environments.get(function(e, environments) {
