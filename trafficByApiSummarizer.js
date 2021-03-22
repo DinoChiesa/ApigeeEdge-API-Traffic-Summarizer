@@ -2,7 +2,7 @@
 // ------------------------------------------------------------------
 //
 // created: Tue Aug  7 14:42:00 2018
-// last saved: <2021-February-08 09:53:34>
+// last saved: <2021-March-22 16:51:20>
 //
 
 /* jshint esversion: 9, node: true, strict: implied */
@@ -22,7 +22,7 @@ const apigeejs     = require('apigee-edge-js'),
       netrc        = require('netrc')(),
       moment       = require('moment'),
       Interval     = require('./interval.js'),
-      version      = '20210208-0953',
+      version      = '20210322-1651',
       GOOG_APIS_SCOPES = ['https://www.googleapis.com/auth/spreadsheets'],
       defaults     = {
         dirs : {
@@ -36,7 +36,7 @@ const apigeejs     = require('apigee-edge-js'),
       ['d' , 'daily', 'optional. collect daily data for the period. Default: collect monthly data.'],
       ['S' , 'sheet', 'optional. create a Google Sheet with the data. Default: emit .csv file.'],
       [''  , 'start=ARG', 'optional. starting date in YYYYMMDD or YYYYMM format. Supercedes -P.'],
-      ['N' , 'nocache', 'optional. do not use cached data; retrieve from stats API']
+      ['' , 'nocache', 'optional. do not use cached data; retrieve from stats API']
     ])).bindHelp();
 
 function handleError(e) {
@@ -914,13 +914,12 @@ if (opt.options.verbose) {
 common.verifyCommonRequiredParameters(opt.options, getopt);
 
 var options = {
-      mgmtServer: opt.options.mgmtserver,
-      org : opt.options.org,
-      user: opt.options.username,
-      password: opt.options.password,
-      no_token: opt.options.notoken,
-      ssoZone: opt.options.ssoZone,
-      verbosity: opt.options.verbose || 0
+      nocache: opt.nocache,
+      prior: opt.prior,
+      daily: opt.daily,
+      sheet: opt.sheet,
+      start: opt.start,
+      ...common.optToOptions(opt)
     };
 
 apigee.connect(options, function(e, org) {

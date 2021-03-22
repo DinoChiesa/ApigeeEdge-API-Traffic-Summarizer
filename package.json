@@ -9,7 +9,7 @@
   "author": "Dino Chiesa <dchiesa@google.com>",
   "license": "Apache-2.0",
   "dependencies": {
-    "apigee-edge-js": "^0.4.15",
+    "apigee-edge-js": "^0.4.22",
     "async": "^3.2.0",
     "googleapis": "^65.0.0",
     "moment": "^2.24.0",
