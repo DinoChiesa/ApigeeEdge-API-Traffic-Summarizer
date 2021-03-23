@@ -2,7 +2,7 @@
 // ------------------------------------------------------------------
 //
 // created: Tue Aug  7 14:42:00 2018
-// last saved: <2021-March-22 16:51:20>
+// last saved: <2021-March-23 14:26:07>
 //
 
 /* jshint esversion: 9, node: true, strict: implied */
@@ -10,7 +10,7 @@
 
 const apigeejs     = require('apigee-edge-js'),
       common       = apigeejs.utility,
-      apigee       = apigeejs.edge,
+      apigee       = apigeejs.apigee,
       sprintf      = require('sprintf-js').sprintf,
       opn          = require('opn'),
       {google}     = require('googleapis'),
@@ -22,7 +22,7 @@ const apigeejs     = require('apigee-edge-js'),
       netrc        = require('netrc')(),
       moment       = require('moment'),
       Interval     = require('./interval.js'),
-      version      = '20210322-1651',
+      version      = '20210323-1426',
       GOOG_APIS_SCOPES = ['https://www.googleapis.com/auth/spreadsheets'],
       defaults     = {
         dirs : {
