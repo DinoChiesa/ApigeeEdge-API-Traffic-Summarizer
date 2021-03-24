@@ -2,7 +2,7 @@
 // ------------------------------------------------------------------
 //
 // created: Tue Aug  7 14:42:00 2018
-// last saved: <2021-March-23 14:26:07>
+// last saved: <2021-March-23 16:19:35>
 //
 
 /* jshint esversion: 9, node: true, strict: implied */
@@ -31,13 +31,13 @@ const apigeejs     = require('apigee-edge-js'),
         },
         mgmtServer: 'https://api.enterprise.apigee.com'
       },
-    getopt = new Getopt(common.commonOptions.concat([
-      ['P' , 'prior', 'optional. use the prior (N-1) year or month. Default: the current year/month.'],
-      ['d' , 'daily', 'optional. collect daily data for the period. Default: collect monthly data.'],
-      ['S' , 'sheet', 'optional. create a Google Sheet with the data. Default: emit .csv file.'],
-      [''  , 'start=ARG', 'optional. starting date in YYYYMMDD or YYYYMM format. Supercedes -P.'],
-      ['' , 'nocache', 'optional. do not use cached data; retrieve from stats API']
-    ])).bindHelp();
+      getopt = new Getopt(common.commonOptions.concat([
+        ['P' , 'prior', 'optional. use the prior (N-1) year or month. Default: the current year/month.'],
+        ['d' , 'daily', 'optional. collect daily data for the period. Default: collect monthly data.'],
+        ['S' , 'sheet', 'optional. create a Google Sheet with the data. Default: emit .csv file.'],
+        [''  , 'start=ARG', 'optional. starting date in YYYYMMDD or YYYYMM format. Supercedes -P.'],
+        ['' , 'nocache', 'optional. do not use cached data; retrieve from stats API']
+      ])).bindHelp();
 
 function handleError(e) {
   if (e) {
@@ -46,31 +46,10 @@ function handleError(e) {
   }
 }
 
-// function memoize( fn ) {
-//   return function () {
-//     var args = Array.prototype.slice.call(arguments),
-//         hash = "",
-//         i = args.length,
-//         currentArg = null;
-//     while (i--) {
-//       currentArg = args[i];
-//       hash += (currentArg === Object(currentArg)) ?
-//         JSON.stringify(currentArg) : currentArg;
-//     }
-//     if ( ! fn.memoize) { fn.memoize = {}; }
-//     return (hash in fn.memoize) ? fn.memoize[hash] :
-//       fn.memoize[hash] = fn.apply(this, args);
-//   };
-// }
-
-// function base64Encode(s) {
-//   return new Buffer.from(s).toString('base64');
-// }
-
 function readCachedFile(url, uniquifier) {
   if (options.nocache) { return false; }
-  let today = moment(new Date()).format('YYYYMMDD');
-  let cacheFileName = path.join(defaults.dirs.cache, uniquifier + '--' + today + '.json');
+  let today = moment(new Date()).format('YYYYMMDD'),
+      cacheFileName = path.join(defaults.dirs.cache, uniquifier + '--' + today + '.json');
   if (opt.options.verbose) {
     common.logWrite('checking for cache file %s....', cacheFileName);
   }
@@ -78,8 +57,7 @@ function readCachedFile(url, uniquifier) {
     if (opt.options.verbose) {
       common.logWrite('using cached data...');
     }
-    var text = fs.readFileSync(cacheFileName,'utf8');
-    return { data: text };
+    return { data: fs.readFileSync(cacheFileName,'utf8') };
   }
   if (opt.options.verbose) {
     common.logWrite('no cached data available.');
@@ -89,7 +67,7 @@ function readCachedFile(url, uniquifier) {
 
 function retrieveData(org, options, cb) {
   options.cacheCheck = readCachedFile;
-  org.stats.get(options, function(error, response) {
+  org.stats.get(options, (error, response) => {
     handleError(error);
     if (response.data) {
       if (response.cachefile) {
@@ -98,18 +76,15 @@ function retrieveData(org, options, cb) {
         }
         fs.writeFileSync(response.cachefile, JSON.stringify(response.data));
       }
-      // if (opt.options.verbose) {
-      //   console.log(response.data); // JSON parsed
-      // }
       return cb(null, response.data);
     }
   });
 }
 
 function handleOneTimeUnit(dataTable, dimension) {
-  return function(record) {
-    var thisMoment = moment(record.timestamp).add(1, interval.timeUnit).endOf(interval.timeUnit);
-    var volume = parseFloat(record.value);
+  return record => {
+    let thisMoment = moment(record.timestamp).add(1, interval.timeUnit).endOf(interval.timeUnit);
+    let volume = parseFloat(record.value);
     if (opt.options.verbose) {
       console.log(sprintf('%-48s %-14s %f',
                           dimension.name,
@@ -119,13 +94,13 @@ function handleOneTimeUnit(dataTable, dimension) {
     if ( ! dataTable[dimension.name]) {
       dataTable[dimension.name] = interval.getRowOfZeros();
     }
-    var col = interval.getColumnNumber(thisMoment);
+    let col = interval.getColumnNumber(thisMoment);
     dataTable[dimension.name][col] = volume;
   };
 }
 
 function processJsonAnalyticsData(results) {
-  var dataTable = {};
+  let dataTable = {};
   if (results.environments[0].dimensions) {
     results.environments[0].dimensions.forEach(function(dimension){
       // dimension.name => api name
@@ -148,7 +123,7 @@ function getDataForOneEnvironment(org, options){
 }
 
 function sleep (time) {
-  return new Promise((resolve) => setTimeout(resolve, time));
+  return new Promise(resolve => setTimeout(resolve, time));
 }
 
 function getNewGsuiteToken(oAuth2Client, tokenStashPath, callback) {
@@ -168,7 +143,7 @@ function getNewGsuiteToken(oAuth2Client, tokenStashPath, callback) {
             input: process.stdin,
             output: process.stdout
           });
-    rl.question('Paste the one-time-code: ', (code) => {
+    rl.question('Paste the one-time-code: ', code => {
       rl.close();
       oAuth2Client.getToken(code, (e, token) => {
         if (e) return callback(e);
@@ -208,7 +183,7 @@ function summarizeEnvironments(rawlines) {
   rawlines.forEach((x1, i1) => {
     const org = x1[0];
     const env = x1[1];
-    var line = lines.find( x => { return (x[0] == org) && (x[1] == env); });
+    let line = lines.find( x => (x[0] == org) && (x[1] == env));
 
     if (line) {
       if (i1>0) {
@@ -222,11 +197,9 @@ function summarizeEnvironments(rawlines) {
     }
     else {
       line = [org, env].concat(x1.slice(3));
-      //console.log('first sighting (%s): %s', env, JSON.stringify(line));
       lines.push(line);
     }
   });
-  //lines.forEach(x => { console.log(x); });
   return lines;
 }
 
@@ -249,7 +222,7 @@ function pushOneUpdate(sheets, spreadsheetId) {
 }
 
 function createSheet(label, lines) {
-  return function(auth) {
+  return auth => {
     console.log('\nCreating a new spreadsheet on Google sheets...');
     const sheets = google.sheets({version: 'v4', auth});
     const today = moment(new Date()).format('YYYY-MMM-DD');
@@ -257,7 +230,7 @@ function createSheet(label, lines) {
             label,
             label.replace('api', 'environment')
           ];
-    var request = {
+    let request = {
           resource: {
             properties : {
               title: "API Traffic: " + opt.options.org + ' for ' + interval.getPeriod() + ' as of ' + today
@@ -814,9 +787,7 @@ function emitCsvFile(label, lines) {
   const outputFile = path.join(defaults.dirs.output, label + '--' + thisMinute + ".csv");
   console.log('writing CSV output to   %s', outputFile);
   const stream = fs.createWriteStream(outputFile, {flags:'w'});
-  lines.forEach(function(line){
-    stream.write(line.join(', ') + '\n');
-  });
+  lines.forEach(line => stream.write(line.join(', ') + '\n'));
   stream.end();
 }
 
@@ -831,7 +802,7 @@ function doneAllEnvironments(e, results) {
   // cells is an array of arrays. Each item is an array of values for columns
   // in that line. Start with the header line.
   //
-  var cells = [ ["org", "env", "proxyname"].concat(interval.getPeriodColumnHeads()).concat(["Total"]) ];
+  let cells = [ ["org", "env", "proxyname"].concat(interval.getPeriodColumnHeads()).concat(["Total"]) ];
 
   //const add = (a, b) => a + b;
   results.forEach(function(dataTable) {
@@ -862,12 +833,38 @@ function doneAllEnvironments(e, results) {
   }
 }
 
-// ========================================================================================
-console.log(
-  'Apigee Analytics Summarizer tool, version: ' + version + '\n' +
-    'Node.js ' + process.version + '\n');
+function getInterval(opt) {
+  let now = new Date();
+  if (opt.options.start) {
+    // from a specified day (or month) until now
+    return new Interval(opt.options.start,
+                        new Date(now.getFullYear(), now.getMonth() + 1, 0),  // eom
+                        opt.options.daily);
+  }
 
+  let n = (opt.options.prior) ? 1: 0;
+  if (opt.options.daily) {
+    // current or prior month
+    return new Interval(new Date(now.getFullYear(), now.getMonth() - n, 1),
+                        new Date(now.getFullYear(), now.getMonth() + 1 - n, 0),
+                        true);
+  }
+
+  // current or prior year
+  return new Interval(new Date(now.getFullYear() - n, 0, 1),
+                      new Date(now.getFullYear() - n, 11, 31),
+                      false);
+}
+
+
+// ========================================================================================
 var opt = getopt.parse(process.argv.slice(2));
+if (opt.options.verbose) {
+  console.log(
+  `Apigee Analytics Summarizer tool, version: ${version}\n` +
+    `Node.js ${process.version}\n`);
+  common.logWrite('start');
+}
 
 if ( ! opt.options.org) {
   common.logWrite('You must specify an organization');
@@ -882,30 +879,7 @@ if (! opt.options.mgmtServer) {
   }
 }
 
-var now = new Date();
-var interval;
-
-if (opt.options.start) {
-  // from a specified day (or month) until now
-  interval = new Interval(opt.options.start,
-                          new Date(now.getFullYear(), now.getMonth() + 1, 0),  // eom
-                          opt.options.daily);
-}
-else {
-  let n = (opt.options.prior) ? 1: 0;
-  if (opt.options.daily) {
-    // current or prior month
-    interval = new Interval(new Date(now.getFullYear(), now.getMonth() - n, 1),
-                          new Date(now.getFullYear(), now.getMonth() + 1 - n, 0),
-                          true);
-  }
-  else {
-    // current or prior year
-    interval = new Interval(new Date(now.getFullYear() - n, 0, 1),
-                            new Date(now.getFullYear() - n, 11, 31),
-                            false);
-  }
-}
+let interval = getInterval(opt);
 
 if (opt.options.verbose) {
   common.logWrite('using chart period: ' + interval.getPeriod());
@@ -927,13 +901,13 @@ apigee.connect(options, function(e, org) {
 
   org.environments.get(function(e, environments) {
     handleError(e);
-    var statsOptions = {
-          nocache : opt.options.nocache,
-          dimension: 'apis',
-          metric: 'sum(message_count)',
-          startTime: interval.start,
-          endTime : interval.end,
-          timeUnit: interval.timeUnit
+    let statsOptions = {
+          nocache   : opt.options.nocache,
+          dimension : 'apis',
+          metric    : 'sum(message_count)',
+          startTime : interval.start,
+          endTime   : interval.end,
+          timeUnit  : interval.timeUnit
         };
 
     async.mapSeries(environments.filter( e => e != 'portal'),
