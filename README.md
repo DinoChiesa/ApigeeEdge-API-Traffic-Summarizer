@@ -18,6 +18,18 @@ and is licensed under the Apache 2.0 license. See the [LICENSE](LICENSE) file.
 
 ## Usage
 
+Before you can use this tool, you need to get the pre-requisites. These are:
+ * node v10.x or later
+ * npm v6.x or later
+
+Also you must install the packages this tool depends on:
+```
+$ npm init
+```
+
+After doing that, you can run the tool. Here's an example, invoking it without
+any options, which shows the usage message.
+
 ```
 $ node ./trafficByApiSummarizer.js
 Apigee Analytics Summarizer tool, version: 20201116-1619
@@ -45,6 +57,18 @@ Options:
   -N, --nocache        optional. do not use cached data; retrieve from stats API
 ```
 
+This tool works by invoking the Apigee /stats APIs, and to do that, it requires
+authentication as an Apigee administrator with the proper authorization to do
+that.
+
+If you ask for a Google sheet as output (the `-S` option), then the tool will
+also connect to Google sheets APIs. The tool will require a separate
+authentication for that.  In this case, when Google cloud requests
+authentication to enable access to the Google sheets API, it will also prompt
+you for your _consent_, to allow the tool to create a sheet on your behalf. You
+need to grant consent to get the sheet.
+
+
 ## Example 1
 
 Generate a Google sheets document that summarizes the traffic volume data for
@@ -59,16 +83,23 @@ the current year, for an organization.
   node ./trafficByApiSummarizer.js -v -n -o my-org-name -S
   ```
 
+* option 3: using an MFA code
+  ```
+  node ./trafficByApiSummarizer.js -v -u username@example.com -C $PASSCODE -o my-org-name -S
+  ```
+
 In the first case, the script will prompt the user for an administrative
 password to Apigee in order to query the Admin API.  In the second case the
 script will use the credentials in the .netrc file for
-api.enterprise.apigee.com.
+api.enterprise.apigee.com. In the third case, the tool will exchange the
+username and the passcode for a token; this works for organizations that require
+multi-factor authentication (MFA).
 
-In both cases, the user will separately be prompted to authenticate to Google, in order to
+In all cases, the user will separately be prompted to authenticate to Google, in order to
 grant consent to the "API Traffic Summarizer" app to generate a
 spreadsheet. Though the scope allows the tool to create and view sheets, the
 tool merely creates a new sheet. It does not read any existing sheets stored in
-Google drive.
+Google drive. You need to grant consent once, the first time you run the tool.
 
 The tool will perform several queries to the /stats API for Apigee, then with
 the resulting data, will create a spreadsheet with 2 sheets and 2 charts; one sheet will
@@ -81,8 +112,8 @@ environment. Then 2 charts corresponding to the data in those sheets.
 ![Chart1](images/screenshot-20180907-083533.png "per-API Proxy traffic chart")
 
 
-This can take a long time to run, if there's lots of data. You may want to use the -v option to see
-verbose output.
+This can take a long time to run, if there's lots of data. You may want to use
+the -v option to see verbose output, to monitor the progress.
 
 
 ## Example 2
