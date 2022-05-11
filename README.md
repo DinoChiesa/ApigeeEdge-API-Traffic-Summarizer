@@ -71,22 +71,28 @@ need to grant consent to get the sheet.
 
 ## Example 1
 
-Generate a Google sheets document that summarizes the traffic volume data for
-the current year, for an organization.
+These four examples all generate a Google sheets document that summarizes the traffic volume data for
+the current year, for an organization.  They differ only in how they authenticate to Apigee.
 
-* option 1: prompt for password
+* option 1: using a previously generated token
+  ```
+  node ./trafficByApiSummarizer.js -v --token ${EDGETOKEN} -o my-org-name -S
+  ```
+
+* option 2: prompt for password
   ```
   node ./trafficByApiSummarizer.js -v -u username@example.com -o my-org-name -S
   ```
-* option 2: using .netrc
+* option 3: using .netrc
   ```
   node ./trafficByApiSummarizer.js -v -n -o my-org-name -S
   ```
 
-* option 3: using an MFA code
+* option 4: using an MFA code
   ```
   node ./trafficByApiSummarizer.js -v -u username@example.com -C $PASSCODE -o my-org-name -S
   ```
+
 
 In the first case, the script will prompt the user for an administrative
 password to Apigee in order to query the Admin API.  In the second case the
@@ -159,6 +165,10 @@ Generate a google sheet that summarizes the traffic volume data, by day, for the
  node ./trafficByApiSummarizer.js -n -o my-org-name -d -P -S
 ```
 
+
+## Implementation
+
+The script queries the /stats APIs in Apigee. Queries look like this:
 
 ## Bugs
 
