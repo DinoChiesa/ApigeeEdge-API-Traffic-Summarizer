@@ -12,7 +12,7 @@
     "apigee-edge-js": "^0.4.32",
     "async": "^3.2.0",
     "googleapis": "^65.0.0",
-    "moment": "^2.24.0",
+    "moment": "^2.29.4",
     "netrc": "^0.1.4",
     "node-getopt": "^0.3.2",
     "opn": "^6.0.0",
