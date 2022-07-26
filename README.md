@@ -1,11 +1,12 @@
 # Apigee Traffic Summarizer
 
-This tool queries the Apigee Analytics API to retrieve message_count (traffic volume) statistics for an organization, over a given year.
+This tool queries the Apigee Analytics API to retrieve message_count (traffic
+volume) statistics for an organization, over a given year.
 
 There are two options for output:
 
 - emit into a .csv file, which can then be imported into a Spreadsheet for further analysis.
-- automatically generate a Google Sheet containing the data. This also generates charts.
+- automatically generate a Google Sheet containing the data. This also generates charts. **Note: This feature is no longer working.**
 
 ## Disclaimer
 
@@ -13,14 +14,14 @@ This example is not an official Google product, nor is it part of an official Go
 
 ## LICENSE
 
-This material is copyright 2018-2020 Google LLC.
+This material is copyright 2018-2022 Google LLC.
 and is licensed under the Apache 2.0 license. See the [LICENSE](LICENSE) file.
 
 ## Usage
 
 Before you can use this tool, you need to get the pre-requisites. These are:
- * node v10.x or later
- * npm v6.x or later
+ * node v16.13.1 or later
+ * npm v8.3.0 or later
 
 Also you must install the packages this tool depends on:
 ```
@@ -31,11 +32,7 @@ After doing that, you can run the tool. Here's an example, invoking it without
 any options, which shows the usage message.
 
 ```
-$ node ./trafficByApiSummarizer.js
-Apigee Analytics Summarizer tool, version: 20201116-1619
-Node.js v12.14.1
-
-[2020-Nov-17 21:22:18] You must specify an organization
+$ node ./trafficByApiSummarizer.js -help
 Usage:
   node trafficByApiSummarizer.js [OPTION]
 
@@ -46,20 +43,29 @@ Options:
   -n, --netrc          retrieve the username + password from the .netrc file. In lieu of -u/-p
   -o, --org=ARG        the Apigee organization.
   -Z, --ssoZone=ARG    specify the SSO zone to use when authenticating.
+      --ssoUrl=ARG     specify the SSO url to use when authenticating.
   -C, --passcode=ARG   specify the passcode to use when authenticating.
+  -J, --keyfile=ARG    the keyfile for a service account, for use with apigee.googleapis.com.
+      --token=ARG      use this explicitly-provided oauth token.
+      --apigeex        use apigee.googleapis.com for the mgmtserver.
   -T, --notoken        do not try to obtain an oauth token.
+  -N, --forcenew       force obtain a new oauth token.
   -v, --verbose
   -h, --help
   -P, --prior          optional. use the prior (N-1) year or month. Default: the current year/month.
   -d, --daily          optional. collect daily data for the period. Default: collect monthly data.
   -S, --sheet          optional. create a Google Sheet with the data. Default: emit .csv file.
-      --start=ARG      optional. starting date in YYYYMMDD or YYYYMM format. Supercedes -P.
-  -N, --nocache        optional. do not use cached data; retrieve from stats API
+      --start=ARG      optional. a starting date in YYYYMMDD or YYYYMM format. Analyzes data until "now". Supercedes -P.
+      --through_eom    optional. use with "start", analyzes until end of the month of "start". Default: until "now".
+      --nocache        optional. do not use cached data; retrieve from stats API
 ```
 
 This tool works by invoking the Apigee /stats APIs, and to do that, it requires
 authentication as an Apigee administrator with the proper authorization to do
 that.
+
+## ============================
+## NOTE: The -S Option is not currently working.
 
 If you ask for a Google sheet as output (the `-S` option), then the tool will
 also connect to Google sheets APIs. The tool will require a separate
@@ -68,10 +74,11 @@ authentication to enable access to the Google sheets API, it will also prompt
 you for your _consent_, to allow the tool to create a sheet on your behalf. You
 need to grant consent to get the sheet.
 
+## ============================
 
-## Example 1
+## Usage Example 1
 
-These four examples all generate a Google sheets document that summarizes the traffic volume data for
+These four examples all generate a CSV file that summarizes the traffic volume data for
 the current year, for an organization.  They differ only in how they authenticate to Apigee.
 
 * option 1: using a previously generated token
@@ -94,10 +101,16 @@ the current year, for an organization.  They differ only in how they authenticat
   ```
 
 
-In the first case, the script will prompt the user for an administrative
-password to Apigee in order to query the Admin API.  In the second case the
+In the first case, the user provides a token that has been obtained separately, perhaps via the Apigee [get_token](https://docs.apigee.com/api-platform/system-administration/auth-tools) tool.
+
+In case 2, the script will prompt the user for an administrative
+password to Apigee in order to query the Admin API.
+
+In case 3, the
 script will use the credentials in the .netrc file for
-api.enterprise.apigee.com. In the third case, the tool will exchange the
+api.enterprise.apigee.com. No need to prompt for password.
+
+In case 4, In the third case, the tool will exchange the
 username and the passcode for a token; this works for organizations that require
 multi-factor authentication (MFA).
 
@@ -122,17 +135,17 @@ This can take a long time to run, if there's lots of data. You may want to use
 the -v option to see verbose output, to monitor the progress.
 
 
-## Example 2
+## Usage Example 2
 
-Generate a Google sheets document that summarizes the traffic volume data since
-July 2017, for an organization.
+Generate a Google sheets document that summarizes the monthly traffic volume data since
+March 2022,  until now, for an organization.
 
 ```
-node ./trafficByApiSummarizer.js -n -v -o my-org-name  -S --start 201707
+node ./trafficByApiSummarizer.js -n -v -o my-org-name  -S --start 202203
 ```
 
 
-## Example 3
+## Usage Example 3
 
 Generate a .csv file that summarizes the traffic volume data for the current
 year, for an Apigee organization.
@@ -148,7 +161,7 @@ proxy" data. It does not include a rollup of "per environment".  Again, this
 can take a long time to run.
 
 
-## Example 4
+## Usage Example 4
 
 Generate a .csv file that summarizes the traffic volume data, by month, for the prior year (-P) for an Apigee organization.
 
@@ -157,7 +170,7 @@ Generate a .csv file that summarizes the traffic volume data, by month, for the 
  node ./trafficByApiSummarizer.js -n -o my-org-name -P
 ```
 
-## Example 5
+## Usage Example 5
 
 Generate a google sheet that summarizes the traffic volume data, by day, for the prior month, for an organization.
 
@@ -165,11 +178,15 @@ Generate a google sheet that summarizes the traffic volume data, by day, for the
  node ./trafficByApiSummarizer.js -n -o my-org-name -d -P -S
 ```
 
+## Usage Example 5
 
-## Implementation
+Generate a CSV that summarizes the traffic volume data, by day, for a specific month, for an organization.
 
-The script queries the /stats APIs in Apigee. Queries look like this:
+```
+ node ./trafficByApiSummarizer.js -n -o my-org-name --daily --start 20220301 --through_eom
+```
+
 
 ## Bugs
 
-none?
+* the -S option no longer works. :( 

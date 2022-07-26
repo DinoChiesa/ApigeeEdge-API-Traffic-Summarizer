@@ -2,7 +2,7 @@
 // ------------------------------------------------------------------
 //
 // created: Tue Aug  7 14:42:00 2018
-// last saved: <2021-March-23 16:19:35>
+// last saved: <2022-July-26 12:33:24>
 //
 
 /* jshint esversion: 9, node: true, strict: implied */
@@ -35,7 +35,8 @@ const apigeejs     = require('apigee-edge-js'),
         ['P' , 'prior', 'optional. use the prior (N-1) year or month. Default: the current year/month.'],
         ['d' , 'daily', 'optional. collect daily data for the period. Default: collect monthly data.'],
         ['S' , 'sheet', 'optional. create a Google Sheet with the data. Default: emit .csv file.'],
-        [''  , 'start=ARG', 'optional. starting date in YYYYMMDD or YYYYMM format. Supercedes -P.'],
+        [''  , 'start=ARG', 'optional. a starting date in YYYYMMDD or YYYYMM format. Analyzes data until "now". Supercedes -P.'],
+        [''  , 'through_eom', 'optional. use with "start", analyzes until end of the month of "start". Default: until "now".'],
         ['' , 'nocache', 'optional. do not use cached data; retrieve from stats API']
       ])).bindHelp();
 
@@ -49,7 +50,7 @@ function handleError(e) {
 function readCachedFile(url, uniquifier) {
   if (options.nocache) { return false; }
   let today = moment(new Date()).format('YYYYMMDD'),
-      cacheFileName = path.join(defaults.dirs.cache, uniquifier + '--' + today + '.json');
+      cacheFileName = path.join(defaults.dirs.cache, `${uniquifier}--${today}.json`);
   if (opt.options.verbose) {
     common.logWrite('checking for cache file %s....', cacheFileName);
   }
@@ -836,11 +837,19 @@ function doneAllEnvironments(e, results) {
 function getInterval(opt) {
   let now = new Date();
   if (opt.options.start) {
+    if (opt.options.through_eom) {
+      // from a specified day (or month) until end of the month containing that day
+      return new Interval(opt.options.start,
+                          null,
+                          opt.options.daily);
+    }
+
     // from a specified day (or month) until now
     return new Interval(opt.options.start,
-                        new Date(now.getFullYear(), now.getMonth() + 1, 0),  // eom
+                        new Date(now.getFullYear(), now.getMonth() + 1, 0),  // end of current month
                         opt.options.daily);
   }
+
 
   let n = (opt.options.prior) ? 1: 0;
   if (opt.options.daily) {

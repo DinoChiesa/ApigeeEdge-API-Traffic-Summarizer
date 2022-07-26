@@ -2,9 +2,9 @@
 // ------------------------------------------------------------------
 //
 // created: Thu Jan 24 12:08:08 2019
-// last saved: <2019-January-24 12:44:30>
+// last saved: <2022-July-26 12:23:28>
 
-/* jshint esversion: 6, node: true */
+/* jshint esversion: 9, node: true */
 /* global process, console, Buffer */
 
 'use strict';
@@ -19,8 +19,10 @@ class Interval {
     this.timeUnit = (daily)?'day':'month';
     this.dateFormat = (daily)?'YYYYMMDD':'YYYYMM';
     if (typeof start === 'string') {
-      this.start = moment(start,this.dateFormat).toDate();
-      this.end = moment(end,this.dateFormat).toDate();
+      let startMoment = moment(start,this.dateFormat);
+      let endMoment = (!end) ? moment(startMoment).endOf('month') : moment(end,this.dateFormat);
+      this.start = startMoment.toDate();
+      this.end = endMoment.toDate();
     }
     else {
       this.start = start;
