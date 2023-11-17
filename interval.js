@@ -1,38 +1,52 @@
-// interval.js
-// ------------------------------------------------------------------
+// Copyright 2018 - 2023 Google LLC
 //
-// created: Thu Jan 24 12:08:08 2019
-// last saved: <2022-July-26 12:23:28>
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+//
+// You may obtain a copy of the License at
+//      https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// last saved: <2023-November-17 13:46:07>
+//
+/* jshint esversion: 9, node: true, strict: implied */
+/* global process, console, Buffer, require*/
 
-/* jshint esversion: 9, node: true */
-/* global process, console, Buffer */
-
-'use strict';
-const moment  = require('moment'),
-      sprintf = require('sprintf-js').sprintf;
-
-const _loop = Symbol('loop');
+const moment = require("moment");
+const _loop = Symbol("loop");
 
 class Interval {
   constructor(start, end, daily) {
     this.daily = daily;
-    this.timeUnit = (daily)?'day':'month';
-    this.dateFormat = (daily)?'YYYYMMDD':'YYYYMM';
-    if (typeof start === 'string') {
-      let startMoment = moment(start,this.dateFormat);
-      let endMoment = (!end) ? moment(startMoment).endOf('month') : moment(end,this.dateFormat);
+    this.timeUnit = daily ? "day" : "month";
+    this.dateFormat = daily ? "YYYYMMDD" : "YYYYMM";
+    this.dateFormat2 = daily ? "YYYYMMDD" : "YYYYMMM";
+    if (typeof start === "string") {
+      const startMoment = moment(start, this.dateFormat).startOf("month");
+      const endMoment = end
+        ? moment(end, this.dateFormat)
+        : moment(startMoment).endOf("month");
       this.start = startMoment.toDate();
       this.end = endMoment.toDate();
-    }
-    else {
+    } else {
       this.start = start;
       this.end = end;
     }
-    this.incrementDate = (t) => t.add(1, (this.daily)?'days':'months');
+    this.incrementDate = (t) => t.add(1, this.daily ? "days" : "months");
   }
 
   [_loop](fn) {
-    for(var t = moment(this.start), end = moment(this.end), ix = 0; t <= end; t = this.incrementDate(t), ix++) {
+    //console.log(`LOOP start: ` + moment(this.start).toString());
+    for (
+      let t = moment(this.start), end = moment(this.end), ix = 0;
+      t <= end;
+      t = this.incrementDate(t), ix++
+    ) {
       fn(t, ix);
     }
   }
@@ -41,31 +55,45 @@ class Interval {
     // Return an array containing column heads, one for each period (month or day).
     // The number of columns returned depends on the chart time period.
 
-    let format = (this.daily)?'MMM DD':'YYYY-MMM';
+    const format = this.daily ? "MMM DD" : "YYYY-MMM";
     // daily: Each value in the array is a monthname and number: 'Mar 06'.
     // monthly: each value in the array is a month and year, formatted as a string: Jan-2018
-    let r = [];
+    const r = [];
     this[_loop]((t) => r.push(t.format(format)));
     return r;
   }
 
   getRowOfZeros() {
-    let r = [];
+    const r = [];
     this[_loop](() => r.push(0));
     return r;
   }
 
+  getSegments() {
+    const r = [];
+    this[_loop]((t, _ix) => {
+      const t1 = moment(t).endOf("month");
+      r.push([moment(t), t1]);
+    });
+    return r;
+  }
+
   getPeriod() {
-    return sprintf('%s-%s',
-                   moment(this.start).format(this.dateFormat),
-                   moment(this.end).format(this.dateFormat));
+    return `${moment(this.start).format(this.dateFormat2)}-${moment(this.end).format(this.dateFormat2)}`;
+  }
+
+  durationInDays() {
+    return Math.round(moment.duration(this.end.valueOf() - this.start.valueOf()).as('days'));
   }
 
   getColumnNumber(thisMoment) {
     // into what column does this moment fit?
+    // thisMoment = milliseconds since epoch, eg output of Date.parse()
     let myIndex = 0;
     this[_loop]((t, ix) => {
-      if (thisMoment >= t) { myIndex = ix; }
+      if (thisMoment >= t) {
+        myIndex = ix;
+      }
     });
     return myIndex;
   }

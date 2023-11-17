@@ -23,9 +23,9 @@ Before you can use this tool, you need to get the pre-requisites. These are:
  * node v16.13.1 or later
  * npm v8.3.0 or later
 
-Also you must install the packages this tool depends on:
+And before using the tool, **you must** install the pre-requisite packages this tool depends on:
 ```
-$ npm init
+$ npm install
 ```
 
 After doing that, you can run the tool. Here's an example, invoking it without
@@ -61,20 +61,35 @@ Options:
 ```
 
 This tool works by invoking the Apigee /stats APIs, and to do that, it requires
-authentication as an Apigee administrator with the proper authorization to do
+authentication as an Apigee administrator or operator, with the proper authorization to do
 that.
 
-## ============================
-## NOTE: The -S Option is not currently working.
 
-If you ask for a Google sheet as output (the `-S` option), then the tool will
+## Creating a Spreadsheet with the Data
+
+Previously the tool supported a `-S` option, which told it to create a Google
+sheet.  The description of this now-unsupported feature is here:
+
+> If you ask for a Google sheet as output (the `-S` option), then the tool will
 also connect to Google sheets APIs. The tool will require a separate
 authentication for that.  In this case, when Google cloud requests
 authentication to enable access to the Google sheets API, it will also prompt
 you for your _consent_, to allow the tool to create a sheet on your behalf. You
 need to grant consent to get the sheet.
 
-## ============================
+Because of changes in the OAuth requirements for Google APIs, the `-S`
+option is not currently working.  To allow it to work, I would need to publish
+this tool, and get it approved for wide distribution.  Sadly, that's not
+something I can do at this time.
+
+BUT, this shouldn't be a problem. You can just generate the .CSV file, and
+import it into your own sheet manually, and you get the same experience. The
+`-S` option just automated that experience.
+
+One drawback is, you'd need to create your own charts within the sheet to
+visualize it.  I'll work on a solution using AppsScript that you can embed in
+your own sheet, to get the chart easily. (As of November 2023, this feature is in the backlog.)
+
 
 ## Usage Example 1
 
@@ -138,7 +153,7 @@ the -v option to see verbose output, to monitor the progress.
 ## Usage Example 2
 
 Generate a Google sheets document that summarizes the monthly traffic volume data since
-March 2022,  until now, for an organization.
+March 2023,  until now, for an organization.
 
 ```
 node ./trafficByApiSummarizer.js -n -v -o my-org-name  -S --start 202203
@@ -157,7 +172,7 @@ year, for an Apigee organization.
 
 When you invoke the program without the -S option, a .csv file is emitted, and
 no Google sheets document is created. The .csv file includes the raw "per API
-proxy" data. It does not include a rollup of "per environment".  Again, this
+proxy" data. It does not include a rollup count of API requests "per environment".  Again, this
 can take a long time to run.
 
 
@@ -186,7 +201,17 @@ Generate a CSV that summarizes the traffic volume data, by day, for a specific m
  node ./trafficByApiSummarizer.js -n -o my-org-name --daily --start 20220301 --through_eom
 ```
 
+## How it works
+
+The tool just layers on top of the documented Apigee Edge /stats API, which is documented [here](https://cloud.google.com/apigee/docs/reference/apis/apigee/rest/v1/organizations.environments.stats?skip_cache=true) and [here](https://docs.apigee.com/api-platform/analytics/71-retrieve-and-filter-metrics-for-a-dimension-from-apigee-analytics-services).
+
+An example of a call that this script sends out to Apigee:
+
+```
+GET https://api.enterprise.apigee.com/v1/organizations/ORG/environments/ENV/stats/apis?select=sum(message_count)&timeUnit=month&timeRange=11/01/2023 07:00~11/30/2023 07:59
+```
+
 
 ## Bugs
 
-* the -S option no longer works. :( 
+* the -S option no longer works. :(
